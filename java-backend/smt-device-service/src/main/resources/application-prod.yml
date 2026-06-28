@@ -1,0 +1,7 @@
+# Device Service prod profile 配置（P0-8 日志 Profile 隔离）
+# 生产环境：SQL 不打印明文，避免敏感数据泄露
+
+mybatis-plus:
+  configuration:
+    # prod 期走 SLF4J，由 logback-spring.xml 控制 com.smt.platform.device.mapper 日志级别
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl

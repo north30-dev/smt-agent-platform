@@ -24,6 +24,14 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- spring-boot-starter-security 以 provided 方式引入（P0-4 RBAC 骨架） -->
+        <!-- 实际运行时由具体业务模块（如 smt-device-service）传递依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>

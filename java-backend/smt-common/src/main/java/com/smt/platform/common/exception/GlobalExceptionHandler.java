@@ -6,6 +6,8 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -18,6 +20,9 @@ import java.util.stream.Collectors;
  *
  * <p>统一捕获业务异常、参数校验异常及未知异常，返回 {@link Result} 结构，
  * 不向前端暴露堆栈信息。</p>
+ *
+ * <p>P0-4 修复：新增 {@link AuthenticationException} 与 {@link AccessDeniedException} 处理器，
+ * 与 {@code AuthErrorHandlers} 配合，确保 401/403 在异常链路中也返回 JSON。</p>
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -57,6 +62,26 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         log.warn("约束校验失败: {}", message);
         return Result.error(ResultCode.PARAM_ERROR, message);
+    }
+
+    /**
+     * 捕获 Spring Security 认证异常（P0-4 修复）：未提供 token 或 token 无效。
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public Result<Void> handleAuthenticationException(AuthenticationException e) {
+        log.warn("认证失败: {}", e.getMessage());
+        return Result.error(ResultCode.UNAUTHORIZED, "未认证或认证已过期");
+    }
+
+    /**
+     * 捕获 Spring Security 授权异常（P0-4 修复）：已认证但权限不足。
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public Result<Void> handleAccessDeniedException(AccessDeniedException e) {
+        log.warn("访问被拒绝: {}", e.getMessage());
+        return Result.error(ResultCode.FORBIDDEN, "无访问权限");
     }
 
     /**

@@ -2,12 +2,16 @@ server:
   port: 8081
 
 spring:
+  # 默认 dev profile，生产由 ENV 覆盖（P0-3/P0-8）
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   application:
     name: smt-device-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/smt
-    username: smt
-    password: smt123
+    # 凭据环境变量化（P0-5），dev 默认值便于本地启动，生产由 ENV 覆盖
+    url: jdbc:postgresql://${SMT_DB_HOST:localhost}:${SMT_DB_PORT:5432}/${SMT_DB_NAME:smt}
+    username: ${SMT_DB_USERNAME:smt}
+    password: ${SMT_DB_PASSWORD:smt123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -15,9 +19,9 @@ spring:
       connection-timeout: 30000
   data:
     redis:
-      host: localhost
-      port: 6379
-      password: root
+      host: ${SMT_REDIS_HOST:localhost}
+      port: ${SMT_REDIS_PORT:6379}
+      password: ${SMT_REDIS_PASSWORD:root}
       timeout: 3000ms
       lettuce:
         pool:
@@ -25,7 +29,7 @@ spring:
           max-idle: 4
           min-idle: 0
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SMT_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       group-id: smt-device-service
       auto-offset-reset: earliest
@@ -40,12 +44,12 @@ spring:
     time-zone: Asia/Shanghai
 
 # MyBatis-Plus 配置
+# 注：log-impl 已迁移到 application-dev.yml/application-prod.yml（P0-8 日志 Profile 隔离）
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
   type-aliases-package: com.smt.platform.device.model
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     banner: false
     db-config:
@@ -54,14 +58,46 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
+# 可观测性（P0-7）：暴露 health/info/prometheus/metrics 端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
 # SMT 业务自定义配置
 smt:
-  # JWT 密钥占位（生产环境请通过环境变量覆盖，长度需 >= 32 字节以支持 HS256）
-  jwt:
-    secret: smt-agent-platform-jwt-secret-key-please-change-in-production-32bytes
+  # 安全配置（P0-4 RBAC 骨架）
+  security:
+    # JWT 配置（P0-5 凭据环境变量化）
+    jwt:
+      secret: ${SMT_JWT_SECRET:dev-only-jwt-secret-key-please-change-in-production-32bytes-min}
+      header: Authorization
+      prefix: "Bearer "
+      expiry-seconds: 86400
+    # Phase 1 单用户管理员凭据，Phase 2 接 DB 用户表（dev 默认值便于本地启动）
+    admin:
+      username: ${SMT_ADMIN_USERNAME:admin}
+      password: ${SMT_ADMIN_PASSWORD:dev-only-admin}
+  # OPC UA 采样参数配置化（P0-6），默认值符合 PRD <100ms 契约
+  opcua:
+    publishing-interval-ms: ${SMT_OPCUA_PUBLISHING_INTERVAL_MS:100}
+    sampling-interval-ms: ${SMT_OPCUA_SAMPLING_INTERVAL_MS:50}
+    queue-size: ${SMT_OPCUA_QUEUE_SIZE:10}
   # MQTT 数据接入配置（与 docker-compose 中的 mosquitto 对应）
   mqtt:
-    broker: tcp://localhost:1883
+    broker: ${SMT_MQTT_BROKER:tcp://localhost:1883}
     client-id-prefix: smt-device-
     qos: 1
   # Mock 数据生成器开关
@@ -78,8 +114,4 @@ smt:
         datapoint-code: vibration
         topic: smt/device/1/vibration
 
-logging:
-  level:
-    root: INFO
-    com.smt.platform: DEBUG
-    org.springframework.jdbc: WARN
+# 注：logging 段已迁移到 logback-spring.xml 与 application-{profile}.yml（P0-8）

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SMT Device Service 日志配置（P0-8 日志 Profile 隔离）
+  - dev：控制台 + DEBUG + SQL 打印
+  - prod：rolling 文件 + INFO + 不打印 SQL 参数
+  - 两个 profile 都包含慢 SQL 日志（logs/slow-sql.log），由 SlowSqlInterceptor 写入
+-->
+<configuration>
+    <property name="LOG_PATH" value="${LOG_PATH:-logs}" />
+    <property name="APP_NAME" value="smt-device-service" />
+
+    <!-- 控制台输出格式 -->
+    <property name="CONSOLE_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n" />
+    <!-- 文件输出格式 -->
+    <property name="FILE_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{64} - %msg%n" />
+
+    <!-- ===== dev profile：控制台 + DEBUG + SQL 打印 ===== -->
+    <springProfile name="dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>${CONSOLE_PATTERN}</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <!-- 慢 SQL 独立文件（rolling 30 天） -->
+        <appender name="SLOW_SQL_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_PATH}/slow-sql.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_PATH}/slow-sql.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>1GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder>
+                <pattern>${FILE_PATTERN}</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <logger name="slow-sql" level="INFO" additivity="false">
+            <appender-ref ref="SLOW_SQL_FILE" />
+        </logger>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE" />
+        </root>
+        <logger name="com.smt.platform" level="DEBUG" />
+        <!-- MyBatis SQL 打印（dev 专属） -->
+        <logger name="com.smt.platform.device.mapper" level="DEBUG" />
+        <logger name="org.springframework.jdbc" level="WARN" />
+    </springProfile>
+
+    <!-- ===== prod profile：rolling 文件 + INFO + 不打印 SQL 参数 ===== -->
+    <springProfile name="prod">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_PATH}/${APP_NAME}.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_PATH}/${APP_NAME}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>5GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder>
+                <pattern>${FILE_PATTERN}</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <!-- 异步包装以避免阻塞业务线程 -->
+        <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+            <queueSize>512</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <neverBlock>true</neverBlock>
+            <appender-ref ref="FILE" />
+        </appender>
+
+        <!-- 慢 SQL 独立文件（rolling 30 天） -->
+        <appender name="SLOW_SQL_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_PATH}/slow-sql.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_PATH}/slow-sql.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>1GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder>
+                <pattern>${FILE_PATTERN}</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <logger name="slow-sql" level="INFO" additivity="false">
+            <appender-ref ref="SLOW_SQL_FILE" />
+        </logger>
+
+        <root level="INFO">
+            <appender-ref ref="ASYNC_FILE" />
+        </root>
+        <logger name="com.smt.platform" level="INFO" />
+        <!-- prod 不打印 SQL 明文，避免敏感数据泄露 -->
+        <logger name="com.smt.platform.device.mapper" level="WARN" />
+        <logger name="org.springframework.jdbc" level="WARN" />
+    </springProfile>
+</configuration>

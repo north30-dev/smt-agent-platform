@@ -10,17 +10,19 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 /**
  * JWT 工具类，基于 jjwt 0.12.x API。
  *
- * <p>密钥从配置项 {@code smt.jwt.secret} 注入，需 >= 32 字节以支持 HS256。</p>
+ * <p>密钥从配置项 {@code smt.security.jwt.secret} 注入（P0-5 凭据环境变量化后路径变更），
+ * 需 >= 32 字节以支持 HS256。</p>
  */
 @Component
 public class JwtUtil {
 
-    @Value("${smt.jwt.secret}")
+    @Value("${smt.security.jwt.secret}")
     private String secret;
 
     /**
@@ -35,6 +37,26 @@ public class JwtUtil {
         long now = System.currentTimeMillis();
         return Jwts.builder()
                 .claims(claims)
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + expireMs))
+                .signWith(key)
+                .compact();
+    }
+
+    /**
+     * 生成 token（携带 subject 与 roles，P0-4 RBAC 骨架使用）。
+     *
+     * @param subject  用户标识（如 username）
+     * @param roles    角色列表（写入 "roles" claim，备 Phase 2 多角色使用）
+     * @param expireMs 过期时长（毫秒）
+     * @return JWT 字符串
+     */
+    public String generateToken(String subject, List<String> roles, long expireMs) {
+        SecretKey key = toKey();
+        long now = System.currentTimeMillis();
+        return Jwts.builder()
+                .subject(subject)
+                .claim("roles", roles)
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + expireMs))
                 .signWith(key)

@@ -1,5 +1,6 @@
 package com.smt.platform.device.collect.opcua;
 
+import jakarta.annotation.PreDestroy;
 import org.eclipse.milo.opcua.sdk.client.OpcUaClient;
 import org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaMonitoredItem;
 import org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaSubscription;
@@ -33,21 +34,25 @@ import java.util.function.BiConsumer;
  *
  * <p>封装 {@link OpcUaClient} 的连接、订阅、监控项创建流程，节点值变化时通过回调
  * 把（采集点编码, 值字符串）交给上层。连接异常仅记录日志不抛出，避免影响其他设备订阅。</p>
+ *
+ * <p>P0-6 修复：采样参数从硬编码 500ms/1000ms 改为 {@link OpcUaProperties} 注入，
+ * 默认值 100ms/50ms 符合 PRD &lt;100ms 契约；新增 {@code @PreDestroy} 销毁回调，
+ * 应用关闭时显式释放所有 OpcUaClient 连接，避免连接泄漏。</p>
  */
 @Component
 public class OpcUaSubscriber {
 
     private static final Logger log = LoggerFactory.getLogger(OpcUaSubscriber.class);
 
-    /** 订阅发布周期（毫秒） */
-    private static final double PUBLISHING_INTERVAL_MS = 500.0;
-    /** 采样周期（毫秒） */
-    private static final double SAMPLING_INTERVAL_MS = 1000.0;
-    /** 监控项队列大小 */
-    private static final int QUEUE_SIZE = 10;
+    /** OPC UA 采样参数（P0-6 配置化，替代原硬编码常量） */
+    private final OpcUaProperties properties;
 
     /** endpointUrl -> client，用于去重与关闭 */
     private final Map<String, OpcUaClient> clients = new ConcurrentHashMap<>();
+
+    public OpcUaSubscriber(OpcUaProperties properties) {
+        this.properties = properties;
+    }
 
     /**
      * 连接 OPC UA Server 并对指定节点建立订阅，节点值变化时回调 callback。
@@ -76,7 +81,7 @@ public class OpcUaSubscriber {
             clients.put(endpointUrl, client);
 
             UaSubscription subscription = client.getSubscriptionManager()
-                    .createSubscription(PUBLISHING_INTERVAL_MS).get();
+                    .createSubscription(properties.getPublishingIntervalMs()).get();
 
             List<String> nodeIds = new ArrayList<>(nodeIdToDatapointCode.keySet());
             List<String> datapointCodes = new ArrayList<>(nodeIdToDatapointCode.values());
@@ -91,8 +96,8 @@ public class OpcUaSubscriber {
                         nodeId, AttributeId.Value.uid(), null, QualifiedName.NULL_VALUE);
                 UInteger clientHandle = subscription.nextClientHandle();
                 MonitoringParameters parameters = new MonitoringParameters(
-                        clientHandle, SAMPLING_INTERVAL_MS, null,
-                        Unsigned.uint(QUEUE_SIZE), true);
+                        clientHandle, properties.getSamplingIntervalMs(), null,
+                        Unsigned.uint(properties.getQueueSize()), true);
                 requests.add(new MonitoredItemCreateRequest(
                         readValueId, MonitoringMode.Reporting, parameters));
             }
@@ -106,8 +111,9 @@ public class OpcUaSubscriber {
             ItemCreationCallback itemCallback = buildItemCreationCallback(datapointCodes, callback);
             subscription.createMonitoredItems(TimestampsToReturn.Both, requests, itemCallback).get();
 
-            log.info("OPC UA 订阅建立成功 deviceId={} endpoint={} 监控项数={}",
-                    deviceId, endpointUrl, requests.size());
+            log.info("OPC UA 订阅建立成功 deviceId={} endpoint={} 监控项数={} publishingMs={} samplingMs={}",
+                    deviceId, endpointUrl, requests.size(),
+                    properties.getPublishingIntervalMs(), properties.getSamplingIntervalMs());
         } catch (Exception e) {
             // 连接/订阅失败仅记录日志，不抛出，避免影响其他设备订阅
             log.error("OPC UA 订阅建立失败 deviceId={} endpoint={} 原因={}",
@@ -139,6 +145,17 @@ public class OpcUaSubscriber {
         for (String endpointUrl : new HashSet<>(clients.keySet())) {
             disconnect(endpointUrl);
         }
+    }
+
+    /**
+     * 应用关闭时显式释放所有 OpcUaClient 连接（P0-6 修复，避免连接泄漏）。
+     *
+     * <p>Spring 容器销毁时由 {@link PreDestroy} 回调触发。</p>
+     */
+    @PreDestroy
+    public void destroy() {
+        log.info("OPC UA Subscriber 销毁：关闭所有连接 count={}", clients.size());
+        disconnectAll();
     }
 
     /**

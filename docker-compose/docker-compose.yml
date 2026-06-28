@@ -3,6 +3,11 @@
 # 停止: cd docker-compose && docker-compose down
 #
 # 包含: PostgreSQL(5432) / Redis(6379) / Zookeeper(2181) / Kafka(9092) / Mosquitto(1883)
+#
+# 凭据环境变量化（P0-5）：
+#   本文件所有 ${VAR} 引用 docker-compose/.env
+#   首次使用：cp docker-compose/.env.example docker-compose/.env
+#   然后填入真实值（生产环境必须修改所有占位符）
 
 version: "3.8"
 
@@ -13,16 +18,16 @@ services:
     container_name: smt-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: smt
-      POSTGRES_USER: smt
-      POSTGRES_PASSWORD: smt123
+      POSTGRES_DB: ${SMT_DB_NAME:-smt}
+      POSTGRES_USER: ${SMT_DB_USERNAME:-smt}
+      POSTGRES_PASSWORD: ${SMT_DB_PASSWORD:-smt123}
       TZ: Asia/Shanghai
     ports:
       - "5432:5432"
     volumes:
       - smt-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U smt -d smt"]
+      test: ["CMD-SHELL", "pg_isready -U ${SMT_DB_USERNAME:-smt} -d ${SMT_DB_NAME:-smt}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,13 +37,13 @@ services:
     image: redis:7-alpine
     container_name: smt-redis
     restart: unless-stopped
-    command: ["redis-server", "--requirepass", "root", "--appendonly", "yes"]
+    command: ["sh", "-c", "redis-server --requirepass \"${SMT_REDIS_PASSWORD:-root}\" --appendonly yes"]
     ports:
       - "6379:6379"
     volumes:
       - smt-redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "root", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"${SMT_REDIS_PASSWORD:-root}\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5

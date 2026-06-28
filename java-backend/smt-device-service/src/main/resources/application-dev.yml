@@ -1,0 +1,7 @@
+# Device Service dev profile 配置（P0-8 日志 Profile 隔离）
+# 开发期便利：SQL 打印到 stdout，便于调试
+
+mybatis-plus:
+  configuration:
+    # dev 期打印 SQL 到 stdout
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

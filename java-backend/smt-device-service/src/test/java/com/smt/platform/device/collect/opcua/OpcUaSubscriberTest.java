@@ -21,10 +21,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
  *
  * <p>不依赖真实 OPC UA Server：直接验证 extractValue 与 buildItemCreationCallback 的回调逻辑，
  * 用 Mockito mock {@link UaMonitoredItem}（接口）捕获值变化消费者并触发，离线即可通过。</p>
+ *
+ * <p>P0-6 修复后构造器需注入 {@link OpcUaProperties}，测试用默认值构造即可
+ * （extractValue / buildItemCreationCallback 不依赖 properties）。</p>
  */
 class OpcUaSubscriberTest {
 
-    private final OpcUaSubscriber subscriber = new OpcUaSubscriber();
+    private final OpcUaSubscriber subscriber = new OpcUaSubscriber(new OpcUaProperties());
 
     // ---------------- extractValue ----------------
 
