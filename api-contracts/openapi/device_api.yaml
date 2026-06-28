@@ -1,0 +1,846 @@
+openapi: 3.0.3
+info:
+  title: SMT 设备服务 REST API
+  description: |
+    smt-device-service 设备服务对外 RESTful 接口契约。
+
+    覆盖设备台账 CRUD、采集点配置、历史数据查询、健康评分等场景。
+    所有响应统一使用 `Result` / `PageResult` 包装，路径前缀 `/api/device`
+    经 `smt-gateway` 网关路由到 `smt-device-service`。
+  version: 1.0.0
+  contact:
+    name: smt-agent-platform
+    url: https://github.com/north30/smt-agent-platform
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: 本地开发环境（经 smt-gateway 网关）
+tags:
+  - name: 设备台账
+    description: 设备元信息增删改查
+  - name: 采集点配置
+    description: 设备采集点（数据项）配置管理
+  - name: 设备数据
+    description: 设备实时/历史数据查询
+paths:
+  /api/device:
+    post:
+      tags:
+        - 设备台账
+      summary: 新增设备
+      description: |
+        创建一台新设备并写入 `device` 表，返回设备 ID 与完整信息。
+        设备编码 `deviceCode` 全局唯一，重复时返回业务错误。
+      operationId: createDevice
+      requestBody:
+        required: true
+        description: 设备创建 DTO
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreateDTO'
+            examples:
+              printer:
+                summary: 印刷机示例
+                value:
+                  deviceCode: PRINTER-001
+                  deviceName: 1号线印刷机
+                  deviceType: PRINTER
+                  productionLine: LINE-01
+                  ipAddress: 192.168.10.11
+                  protocolType: OPC_UA
+                  opcUaEndpoint: opc.tcp://192.168.10.11:4840
+                  status: RUNNING
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResult'
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              examples:
+                invalidParam:
+                  summary: 字段校验失败
+                  value:
+                    code: 400
+                    message: 设备编码不能为空
+                    data: null
+  /api/device/{id}:
+    get:
+      tags:
+        - 设备台账
+      summary: 设备详情
+      description: |
+        根据设备 ID 查询单台设备的完整信息，响应中包含 `healthScore` 健康评分字段。
+      operationId: getDeviceById
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResult'
+        '404':
+          description: 设备不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              examples:
+                notFound:
+                  summary: 设备不存在
+                  value:
+                    code: 404
+                    message: 设备不存在
+                    data: null
+    put:
+      tags:
+        - 设备台账
+      summary: 更新设备
+      description: |
+        根据设备 ID 更新设备信息。请求体支持部分字段更新，未传字段保持原值。
+        `deviceCode` 不允许修改（如需修改请走业务专用接口）。
+      operationId: updateDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      requestBody:
+        required: true
+        description: 设备更新 DTO
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdateDTO'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResult'
+        '404':
+          description: 设备不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+    delete:
+      tags:
+        - 设备台账
+      summary: 删除设备（软删除）
+      description: |
+        根据设备 ID 软删除设备（标记 `is_deleted=1`），不进行物理删除。
+        软删除后该设备在列表查询中不再返回，但其历史数据保留以便追溯。
+      operationId: deleteDevice
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              examples:
+                success:
+                  summary: 删除成功
+                  value:
+                    code: 200
+                    message: 删除成功
+                    data: null
+        '404':
+          description: 设备不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  /api/device/list:
+    get:
+      tags:
+        - 设备台账
+      summary: 分页查询设备列表
+      description: |
+        按产线 `productionLine`、设备类型 `deviceType`、状态 `status` 可选筛选，
+        分页返回设备列表。结果按 `createTime` 倒序排列。
+      operationId: listDevices
+      parameters:
+        - name: page
+          in: query
+          description: 页码，从 1 开始
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          description: 每页条数
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 10
+        - name: productionLine
+          in: query
+          description: 产线（可选筛选）
+          required: false
+          schema:
+            type: string
+            example: LINE-01
+        - name: deviceType
+          in: query
+          description: 设备类型（可选筛选）
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeviceType'
+        - name: status
+          in: query
+          description: 设备状态（可选筛选）
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeviceStatus'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePageResult'
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  /api/device/{deviceId}/datapoints:
+    get:
+      tags:
+        - 采集点配置
+      summary: 查询设备下所有采集点
+      description: 返回指定设备下的全部采集点配置列表，不分页。
+      operationId: listDataPoints
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPathParam'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPointListResult'
+        '404':
+          description: 设备不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+    post:
+      tags:
+        - 采集点配置
+      summary: 为设备新增采集点
+      description: |
+        为指定设备新增一个采集点，写入 `device_data_point` 表并关联 `deviceId`。
+        `datapointCode` 在同一设备下唯一。
+      operationId: createDataPoint
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPathParam'
+      requestBody:
+        required: true
+        description: 采集点创建 DTO
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataPointCreateDTO'
+            examples:
+              temperature:
+                summary: OPC UA 温度采集点
+                value:
+                  datapointCode: TEMP-01
+                  datapointName: 印刷机温度
+                  nodePath: ns=2;s=Temperature
+                  dataType: NUMBER
+                  sampleIntervalMs: 1000
+              mqttVibration:
+                summary: MQTT 振动采集点
+                value:
+                  datapointCode: VIB-01
+                  datapointName: 贴片机振动
+                  nodePath: /smt/mounter/vibration
+                  dataType: NUMBER
+                  sampleIntervalMs: 500
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPointResult'
+        '400':
+          description: 参数校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '404':
+          description: 设备不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+  /api/device/{deviceId}/data:
+    get:
+      tags:
+        - 设备数据
+      summary: 历史数据查询
+      description: |
+        按采集点编码 `datapointCode` 与时间范围 `[startTime, endTime]` 分页查询
+        设备历史数据，结果按 `timestamp` 升序返回。`value` 统一为字符串类型，
+        前端按 `dataType` 自行转换。
+      operationId: queryDeviceData
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPathParam'
+        - name: datapointCode
+          in: query
+          description: 采集点编码（必填）
+          required: true
+          schema:
+            type: string
+            example: TEMP-01
+        - name: startTime
+          in: query
+          description: 起始时间（必填，ISO-8601，如 `2026-06-27T00:00:00Z`）
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: endTime
+          in: query
+          description: 结束时间（必填，ISO-8601）
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          description: 页码，从 1 开始
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          description: 每页条数
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDataPageResult'
+        '400':
+          description: 参数校验失败（如时间范围缺失或颠倒）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '404':
+          description: 设备或采集点不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+components:
+  parameters:
+    DeviceIdPath:
+      name: id
+      in: path
+      description: 设备 ID（路径参数，用于 `/api/device/{id}` 系列接口）
+      required: true
+      schema:
+        type: integer
+        format: int64
+        example: 1001
+    DeviceIdPathParam:
+      name: deviceId
+      in: path
+      description: 设备 ID（路径参数，用于 `/api/device/{deviceId}/*` 系列接口）
+      required: true
+      schema:
+        type: integer
+        format: int64
+        example: 1001
+  schemas:
+    DeviceType:
+      type: string
+      description: 设备类型
+      enum:
+        - PRINTER
+        - MOUNTER
+        - REFLOW
+        - AOI
+        - SPI
+        - OTHER
+      x-enum-descriptions:
+        PRINTER: 印刷机
+        MOUNTER: 贴片机
+        REFLOW: 回流焊
+        AOI: 自动光学检测
+        SPI: 锡膏检测
+        OTHER: 其他
+    DeviceStatus:
+      type: string
+      description: 设备状态
+      enum:
+        - RUNNING
+        - STOPPED
+        - MAINTENANCE
+      x-enum-descriptions:
+        RUNNING: 运行中
+        STOPPED: 已停机
+        MAINTENANCE: 维修中
+    ProtocolType:
+      type: string
+      description: 通信协议类型
+      enum:
+        - OPC_UA
+        - MQTT
+      x-enum-descriptions:
+        OPC_UA: OPC UA 协议
+        MQTT: MQTT 协议
+    DataType:
+      type: string
+      description: 采集点数据类型
+      enum:
+        - NUMBER
+        - STRING
+        - BOOLEAN
+      x-enum-descriptions:
+        NUMBER: 数值型
+        STRING: 字符串型
+        BOOLEAN: 布尔型
+    Device:
+      type: object
+      description: 设备实体
+      required:
+        - id
+        - deviceCode
+        - deviceName
+        - deviceType
+        - productionLine
+        - ipAddress
+        - protocolType
+        - status
+        - healthScore
+        - createTime
+        - updateTime
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 设备 ID
+          example: 1001
+        deviceCode:
+          type: string
+          description: 设备编码（全局唯一）
+          example: PRINTER-001
+        deviceName:
+          type: string
+          description: 设备名称
+          example: 1号线印刷机
+        deviceType:
+          allOf:
+            - $ref: '#/components/schemas/DeviceType'
+          description: 设备类型
+        productionLine:
+          type: string
+          description: 所属产线
+          example: LINE-01
+        ipAddress:
+          type: string
+          description: 设备 IP 地址
+          example: 192.168.10.11
+        protocolType:
+          allOf:
+            - $ref: '#/components/schemas/ProtocolType'
+          description: 通信协议类型
+        opcUaEndpoint:
+          type: string
+          description: OPC UA 端点（仅 `protocolType=OPC_UA` 时必填）
+          example: opc.tcp://192.168.10.11:4840
+        status:
+          allOf:
+            - $ref: '#/components/schemas/DeviceStatus'
+          description: 设备状态
+        healthScore:
+          type: integer
+          description: 健康评分（0-100，分数越高越健康）
+          minimum: 0
+          maximum: 100
+          example: 88
+        createTime:
+          type: string
+          format: date-time
+          description: 创建时间（ISO-8601）
+          example: '2026-06-27T08:30:00Z'
+        updateTime:
+          type: string
+          format: date-time
+          description: 最近更新时间（ISO-8601）
+          example: '2026-06-27T09:00:00Z'
+    DeviceDataPoint:
+      type: object
+      description: 设备采集点
+      required:
+        - id
+        - deviceId
+        - datapointCode
+        - datapointName
+        - nodePath
+        - dataType
+        - sampleIntervalMs
+        - createTime
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 采集点 ID
+          example: 2001
+        deviceId:
+          type: integer
+          format: int64
+          description: 所属设备 ID
+          example: 1001
+        datapointCode:
+          type: string
+          description: 采集点编码（同一设备下唯一）
+          example: TEMP-01
+        datapointName:
+          type: string
+          description: 采集点名称
+          example: 印刷机温度
+        nodePath:
+          type: string
+          description: 节点路径（OPC UA NodeId 或 MQTT Topic）
+          example: ns=2;s=Temperature
+        dataType:
+          allOf:
+            - $ref: '#/components/schemas/DataType'
+          description: 数据类型
+        sampleIntervalMs:
+          type: integer
+          description: 采样周期（毫秒）
+          minimum: 100
+          example: 1000
+        createTime:
+          type: string
+          format: date-time
+          description: 创建时间（ISO-8601）
+          example: '2026-06-27T08:30:00Z'
+    DeviceData:
+      type: object
+      description: 设备数据点（历史值）
+      required:
+        - id
+        - deviceId
+        - datapointCode
+        - value
+        - timestamp
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 数据记录 ID
+          example: 9000001
+        deviceId:
+          type: integer
+          format: int64
+          description: 设备 ID
+          example: 1001
+        datapointCode:
+          type: string
+          description: 采集点编码
+          example: TEMP-01
+        value:
+          type: string
+          description: 数据值（统一用 string 传输，前端按 `dataType` 转换）
+          example: '42.5'
+        timestamp:
+          type: string
+          format: date-time
+          description: 数据采集时间（ISO-8601）
+          example: '2026-06-27T08:30:00Z'
+    DeviceCreateDTO:
+      type: object
+      description: 新增设备请求体
+      required:
+        - deviceCode
+        - deviceName
+        - deviceType
+        - productionLine
+        - ipAddress
+        - protocolType
+        - status
+      properties:
+        deviceCode:
+          type: string
+          description: 设备编码（全局唯一）
+          example: PRINTER-001
+        deviceName:
+          type: string
+          description: 设备名称
+          example: 1号线印刷机
+        deviceType:
+          allOf:
+            - $ref: '#/components/schemas/DeviceType'
+        productionLine:
+          type: string
+          description: 所属产线
+          example: LINE-01
+        ipAddress:
+          type: string
+          description: 设备 IP 地址
+          example: 192.168.10.11
+        protocolType:
+          allOf:
+            - $ref: '#/components/schemas/ProtocolType'
+        opcUaEndpoint:
+          type: string
+          description: OPC UA 端点（`protocolType=OPC_UA` 时必填）
+          example: opc.tcp://192.168.10.11:4840
+        status:
+          allOf:
+            - $ref: '#/components/schemas/DeviceStatus'
+    DeviceUpdateDTO:
+      type: object
+      description: |
+        更新设备请求体。支持部分字段更新，未传字段保持原值；
+        `deviceCode` 不允许通过本接口修改。
+      properties:
+        deviceName:
+          type: string
+          description: 设备名称
+          example: 1号线印刷机（升级版）
+        deviceType:
+          allOf:
+            - $ref: '#/components/schemas/DeviceType'
+        productionLine:
+          type: string
+          description: 所属产线
+          example: LINE-01
+        ipAddress:
+          type: string
+          description: 设备 IP 地址
+          example: 192.168.10.12
+        protocolType:
+          allOf:
+            - $ref: '#/components/schemas/ProtocolType'
+        opcUaEndpoint:
+          type: string
+          description: OPC UA 端点
+          example: opc.tcp://192.168.10.12:4840
+        status:
+          allOf:
+            - $ref: '#/components/schemas/DeviceStatus'
+    DataPointCreateDTO:
+      type: object
+      description: 新增采集点请求体
+      required:
+        - datapointCode
+        - datapointName
+        - nodePath
+        - dataType
+        - sampleIntervalMs
+      properties:
+        datapointCode:
+          type: string
+          description: 采集点编码（同一设备下唯一）
+          example: TEMP-01
+        datapointName:
+          type: string
+          description: 采集点名称
+          example: 印刷机温度
+        nodePath:
+          type: string
+          description: 节点路径（OPC UA NodeId 或 MQTT Topic）
+          example: ns=2;s=Temperature
+        dataType:
+          allOf:
+            - $ref: '#/components/schemas/DataType'
+        sampleIntervalMs:
+          type: integer
+          description: 采样周期（毫秒）
+          minimum: 100
+          example: 1000
+    Result:
+      type: object
+      description: |
+        统一响应包装。成功时 `code=200`；业务/系统错误时 `code` 非 200，
+        `message` 描述错误原因，`data` 通常为 null。
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: 业务状态码（200 表示成功）
+          example: 200
+        message:
+          type: string
+          description: 提示信息
+          example: 操作成功
+        data:
+          description: 业务数据（无数据时为 null）
+          nullable: true
+    DeviceResult:
+      allOf:
+        - $ref: '#/components/schemas/Result'
+        - type: object
+          description: 设备详情响应
+          properties:
+            data:
+              $ref: '#/components/schemas/Device'
+    DataPointResult:
+      allOf:
+        - $ref: '#/components/schemas/Result'
+        - type: object
+          description: 采集点详情响应
+          properties:
+            data:
+              $ref: '#/components/schemas/DeviceDataPoint'
+    DataPointListResult:
+      allOf:
+        - $ref: '#/components/schemas/Result'
+        - type: object
+          description: 采集点列表响应
+          properties:
+            data:
+              type: array
+              description: 采集点列表（不分页）
+              items:
+                $ref: '#/components/schemas/DeviceDataPoint'
+    PageResult:
+      type: object
+      description: |
+        分页响应包装基类。`data` 为分页对象，含 `records`、`total`、`page`、`size`。
+      required:
+        - code
+        - message
+        - data
+      properties:
+        code:
+          type: integer
+          description: 业务状态码（200 表示成功）
+          example: 200
+        message:
+          type: string
+          description: 提示信息
+          example: 查询成功
+        data:
+          type: object
+          description: 分页数据对象
+          required:
+            - records
+            - total
+            - page
+            - size
+          properties:
+            records:
+              type: array
+              description: 当前页记录列表
+              items: {}
+            total:
+              type: integer
+              format: int64
+              description: 总记录数
+              example: 128
+            page:
+              type: integer
+              description: 当前页码
+              example: 1
+            size:
+              type: integer
+              description: 每页条数
+              example: 10
+    DevicePageResult:
+      allOf:
+        - $ref: '#/components/schemas/Result'
+        - type: object
+          description: 设备分页响应
+          properties:
+            data:
+              type: object
+              description: 设备分页数据
+              required:
+                - records
+                - total
+                - page
+                - size
+              properties:
+                records:
+                  type: array
+                  description: 当前页设备列表
+                  items:
+                    $ref: '#/components/schemas/Device'
+                total:
+                  type: integer
+                  format: int64
+                  description: 总记录数
+                  example: 128
+                page:
+                  type: integer
+                  description: 当前页码
+                  example: 1
+                size:
+                  type: integer
+                  description: 每页条数
+                  example: 10
+    DeviceDataPageResult:
+      allOf:
+        - $ref: '#/components/schemas/Result'
+        - type: object
+          description: 设备历史数据分页响应
+          properties:
+            data:
+              type: object
+              description: 历史数据分页对象
+              required:
+                - records
+                - total
+                - page
+                - size
+              properties:
+                records:
+                  type: array
+                  description: 历史数据列表（按时间升序）
+                  items:
+                    $ref: '#/components/schemas/DeviceData'
+                total:
+                  type: integer
+                  format: int64
+                  description: 总记录数
+                  example: 3600
+                page:
+                  type: integer
+                  description: 当前页码
+                  example: 1
+                size:
+                  type: integer
+                  description: 每页条数
+                  example: 100
+

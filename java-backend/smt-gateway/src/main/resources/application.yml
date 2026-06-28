@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  # 默认 dev profile，生产由 ENV 覆盖（P0-3/P0-8）
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  application:
+    name: smt-gateway
+  cloud:
+    gateway:
+      routes:
+        # /api/device/** 转发至设备服务
+        # 网关默认保留原始路径前缀，device-service 的 Controller 以 /api/device 为前缀，无需 StripPrefix
+        - id: device-service
+          # 后端服务地址环境变量化（P0-5）
+          uri: http://${SMT_DEVICE_SERVICE_HOST:localhost}:${SMT_DEVICE_SERVICE_PORT:8081}
+          predicates:
+            - Path=/api/device/**
+
+# 注：logging 段已迁移到 logback-spring.xml（P0-8）
