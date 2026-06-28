@@ -32,30 +32,30 @@ class OpcUaSubscriberTest {
     // ---------------- extractValue ----------------
 
     @Test
-    void extractValue_应将数值型Variant转为字符串() {
+    void extractValue_shouldConvertNumericVariantToString() {
         DataValue dv = new DataValue(new Variant(75.5));
         assertThat(subscriber.extractValue(dv)).isEqualTo("75.5");
     }
 
     @Test
-    void extractValue_应将字符串型Variant原样返回() {
+    void extractValue_shouldReturnStringVariantAsIs() {
         DataValue dv = new DataValue(new Variant("hello"));
         assertThat(subscriber.extractValue(dv)).isEqualTo("hello");
     }
 
     @Test
-    void extractValue_应将布尔型Variant转为字符串() {
+    void extractValue_shouldConvertBooleanVariantToString() {
         DataValue dv = new DataValue(new Variant(true));
         assertThat(subscriber.extractValue(dv)).isEqualTo("true");
     }
 
     @Test
-    void extractValue_null入参应返回null() {
+    void extractValue_nullInputShouldReturnNull() {
         assertThat(subscriber.extractValue(null)).isNull();
     }
 
     @Test
-    void extractValue_空Variant应返回null() {
+    void extractValue_emptyVariantShouldReturnNull() {
         DataValue dv = new DataValue(Variant.NULL_VALUE);
         assertThat(subscriber.extractValue(dv)).isNull();
     }
@@ -64,7 +64,7 @@ class OpcUaSubscriberTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void buildItemCreationCallback_值变化时应按索引触发用户回调() {
+    void buildItemCreationCallback_shouldTriggerUserCallbackByIndexOnValueChange() {
         BiConsumer<String, String> userCallback = mock(BiConsumer.class);
         List<String> datapointCodes = List.of("DEV-TEMP", "DEV-VIB");
 
@@ -85,7 +85,7 @@ class OpcUaSubscriberTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void buildItemCreationCallback_应按正确索引匹配第二个采集点() {
+    void buildItemCreationCallback_shouldMatchSecondDatapointByIndex() {
         BiConsumer<String, String> userCallback = mock(BiConsumer.class);
         List<String> datapointCodes = List.of("DEV-TEMP", "DEV-VIB");
 
@@ -102,7 +102,7 @@ class OpcUaSubscriberTest {
     }
 
     @Test
-    void buildItemCreationCallback_索引越界时不注册消费者也不触发回调() {
+    void buildItemCreationCallback_indexOutOfBoundsShouldNotRegisterOrTrigger() {
         BiConsumer<String, String> userCallback = mock(BiConsumer.class);
         List<String> datapointCodes = List.of("DEV-TEMP");
 
@@ -118,7 +118,7 @@ class OpcUaSubscriberTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void buildItemCreationCallback_值消费者收到空值时不应触发回调() {
+    void buildItemCreationCallback_nullValueShouldNotTriggerCallback() {
         BiConsumer<String, String> userCallback = mock(BiConsumer.class);
         List<String> datapointCodes = List.of("DEV-TEMP");
 

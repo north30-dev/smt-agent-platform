@@ -40,7 +40,7 @@ class MqttSubscriberManagerTest {
     // ---------------- subscribe 回调路径 ----------------
 
     @Test
-    void subscribe_应调用客户端订阅topic() throws Exception {
+    void subscribe_shouldInvokeClientSubscribe() throws Exception {
         @SuppressWarnings("unchecked")
         BiConsumer<String, String> callback = mock(BiConsumer.class);
 
@@ -50,7 +50,7 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void subscribe_topic为空应跳过订阅() {
+    void subscribe_emptyTopicShouldSkip() {
         @SuppressWarnings("unchecked")
         BiConsumer<String, String> callback = mock(BiConsumer.class);
 
@@ -60,7 +60,7 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void handleMessage_消息到达应按topic路由并传递原始payload() {
+    void handleMessage_shouldRouteByTopicAndPassOriginalPayload() {
         @SuppressWarnings("unchecked")
         BiConsumer<String, String> callback = mock(BiConsumer.class);
         manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
@@ -73,7 +73,7 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void handleMessage_未订阅topic的消息应被忽略() {
+    void handleMessage_unsubscribedTopicShouldBeIgnored() {
         @SuppressWarnings("unchecked")
         BiConsumer<String, String> callback = mock(BiConsumer.class);
         manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
@@ -85,7 +85,7 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void handleMessage_回调抛异常时不应向外抛出() {
+    void handleMessage_callbackExceptionShouldNotPropagate() {
         @SuppressWarnings("unchecked")
         BiConsumer<String, String> callback = (code, payload) -> {
             throw new RuntimeException("模拟回调异常");
@@ -98,14 +98,14 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void publish_应通过客户端发布消息() throws Exception {
+    void publish_shouldInvokeClientPublish() throws Exception {
         manager.publish("smt/device/1/temperature", "{\"value\":\"80\"}");
 
         verify(mockClient).publish(eq("smt/device/1/temperature"), any(MqttMessage.class));
     }
 
     @Test
-    void publish_topic或payload为空应跳过() throws Exception {
+    void publish_emptyTopicOrPayloadShouldSkip() throws Exception {
         manager.publish("", "payload");
         manager.publish("smt/device/1/temperature", null);
 
@@ -116,7 +116,7 @@ class MqttSubscriberManagerTest {
     // ---------------- parsePayload 解析逻辑 ----------------
 
     @Test
-    void parsePayload_标准JSON应解析出value和timestamp() {
+    void parsePayload_standardJsonShouldParseValueAndTimestamp() {
         MqttSubscriberManager.ParsedPayload parsed =
                 manager.parsePayload("{\"value\":\"75.5\",\"timestamp\":\"2026-06-27T10:00:00\"}");
 
@@ -125,7 +125,7 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void parsePayload_数值型value应转为字符串() {
+    void parsePayload_numericValueShouldBeConvertedToString() {
         MqttSubscriberManager.ParsedPayload parsed =
                 manager.parsePayload("{\"value\":75.5,\"timestamp\":\"2026-06-27T10:00:00\"}");
 
@@ -133,7 +133,7 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void parsePayload_纯文本应作为value并使用当前时间() {
+    void parsePayload_plainTextShouldBeUsedAsValueWithCurrentTime() {
         MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("hello");
 
         assertThat(parsed.value).isEqualTo("hello");
@@ -141,21 +141,21 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void parsePayload_空payload应返回空value() {
+    void parsePayload_emptyPayloadShouldReturnEmptyValue() {
         MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("");
 
         assertThat(parsed.value).isEmpty();
     }
 
     @Test
-    void parsePayload_nullpayload应返回空value() {
+    void parsePayload_nullPayloadShouldReturnEmptyValue() {
         MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload(null);
 
         assertThat(parsed.value).isEmpty();
     }
 
     @Test
-    void parsePayload_JSON缺失timestamp应使用当前时间() {
+    void parsePayload_missingTimestampShouldUseCurrentTime() {
         MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("{\"value\":\"42\"}");
 
         assertThat(parsed.value).isEqualTo("42");
@@ -163,7 +163,7 @@ class MqttSubscriberManagerTest {
     }
 
     @Test
-    void parsePayload_非法JSON应作为纯文本处理() {
+    void parsePayload_invalidJsonShouldBeTreatedAsPlainText() {
         MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("{broken");
 
         assertThat(parsed.value).isEqualTo("{broken");
