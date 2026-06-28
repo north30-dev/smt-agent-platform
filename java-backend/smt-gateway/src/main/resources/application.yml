@@ -1,0 +1,20 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: smt-gateway
+  cloud:
+    gateway:
+      routes:
+        # /api/device/** 转发至设备服务
+        # 网关默认保留原始路径前缀，device-service 的 Controller 以 /api/device 为前缀，无需 StripPrefix
+        - id: device-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/device/**
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: DEBUG
