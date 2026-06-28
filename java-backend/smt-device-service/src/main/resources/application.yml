@@ -1,0 +1,85 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: smt-device-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/smt
+    username: smt
+    password: smt123
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: root
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 0
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: smt-device-service
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.smt.platform.device.model
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# SMT 业务自定义配置
+smt:
+  # JWT 密钥占位（生产环境请通过环境变量覆盖，长度需 >= 32 字节以支持 HS256）
+  jwt:
+    secret: smt-agent-platform-jwt-secret-key-please-change-in-production-32bytes
+  # MQTT 数据接入配置（与 docker-compose 中的 mosquitto 对应）
+  mqtt:
+    broker: tcp://localhost:1883
+    client-id-prefix: smt-device-
+    qos: 1
+  # Mock 数据生成器开关
+  mock:
+    enabled: false
+    interval-ms: 5000
+    # 模拟设备与采集点配置，smt.mock.enabled=true 时由 MockMqttPublisher 周期发布
+    # 扁平结构：每项含 device-id / datapoint-code / topic，由 MockProperties 绑定
+    devices:
+      - device-id: 1
+        datapoint-code: temperature
+        topic: smt/device/1/temperature
+      - device-id: 1
+        datapoint-code: vibration
+        topic: smt/device/1/vibration
+
+logging:
+  level:
+    root: INFO
+    com.smt.platform: DEBUG
+    org.springframework.jdbc: WARN
