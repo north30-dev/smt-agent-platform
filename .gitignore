@@ -13,6 +13,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
 
 # ===== C++ 原生层 =====
 cpp-native/build/

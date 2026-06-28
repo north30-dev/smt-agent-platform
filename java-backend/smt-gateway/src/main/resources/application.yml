@@ -17,5 +17,20 @@ spring:
           uri: http://${SMT_DEVICE_SERVICE_HOST:localhost}:${SMT_DEVICE_SERVICE_PORT:8081}
           predicates:
             - Path=/api/device/**
+        # Phase 2 新增：Python Agent 路由
+        # /api/agent/knowledge/** → agent-knowledge（8004），StripPrefix=2 剥离 /api/agent，Python 收到 /knowledge/**
+        - id: agent-knowledge
+          uri: http://${SMT_AGENT_KNOWLEDGE_HOST:localhost}:${SMT_AGENT_KNOWLEDGE_PORT:8004}
+          predicates:
+            - Path=/api/agent/knowledge/**
+          filters:
+            - StripPrefix=2
+        # /api/agent/maintenance/** → agent-maintenance（8002），StripPrefix=2 剥离 /api/agent，Python 收到 /maintenance/**
+        - id: agent-maintenance
+          uri: http://${SMT_AGENT_MAINTENANCE_HOST:localhost}:${SMT_AGENT_MAINTENANCE_PORT:8002}
+          predicates:
+            - Path=/api/agent/maintenance/**
+          filters:
+            - StripPrefix=2
 
 # 注：logging 段已迁移到 logback-spring.xml（P0-8）

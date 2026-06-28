@@ -3,6 +3,7 @@
 # 停止: cd docker-compose && docker-compose down
 #
 # 包含: PostgreSQL(5432) / Redis(6379) / Zookeeper(2181) / Kafka(9092) / Mosquitto(1883)
+#       Milvus(19530) + etcd(2379) + minio(9000)（Phase 2 新增，供 Python Agent RAG 使用）
 #
 # 凭据环境变量化（P0-5）：
 #   本文件所有 ${VAR} 引用 docker-compose/.env
@@ -109,7 +110,82 @@ services:
       timeout: 5s
       retries: 5
 
+  # ===== Phase 2 新增：Milvus 向量库及其依赖 =====
+  # 用于 Python Agent RAG（知识助手 + 故障案例库）
+  # etcd：Milvus 元数据存储
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: smt-etcd
+    restart: unless-stopped
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+      - TZ=Asia/Shanghai
+    volumes:
+      - smt-etcd-data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # minio：Milvus 对象存储
+  minio:
+    image: minio/minio:RELEASE.2023-03-24T21-41-23Z
+    container_name: smt-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ACCESS_KEY: ${SMT_MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${SMT_MINIO_SECRET_KEY:-minioadmin}
+      TZ: Asia/Shanghai
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - smt-minio-data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Milvus Standalone：向量数据库
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: smt-milvus
+    restart: unless-stopped
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${SMT_MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${SMT_MINIO_SECRET_KEY:-minioadmin}
+      MILVUS_AUTHORIZATION_ENABLED: "false"
+      TZ: Asia/Shanghai
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - smt-milvus-data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    command: ["milvus", "run", "standalone"]
+
 volumes:
   smt-postgres-data:
   smt-redis-data:
   smt-kafka-data:
+  smt-etcd-data:
+  smt-minio-data:
+  smt-milvus-data:
