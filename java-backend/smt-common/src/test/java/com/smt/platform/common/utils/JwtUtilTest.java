@@ -72,4 +72,20 @@ class JwtUtilTest {
     void validateToken_invalidToken_returnsFalse() {
         assertThat(jwtUtil.validateToken("not.a.valid.token")).isFalse();
     }
+
+    /**
+     * 补齐 S-SEC-3：空字符串 token 应返回 false（不抛异常）。
+     */
+    @Test
+    void validateToken_emptyToken_returnsFalse() {
+        assertThat(jwtUtil.validateToken("")).isFalse();
+    }
+
+    /**
+     * 补齐 S-SEC-3：null token 应返回 false（IllegalArgumentException 被捕获）。
+     */
+    @Test
+    void validateToken_nullToken_returnsFalse() {
+        assertThat(jwtUtil.validateToken(null)).isFalse();
+    }
 }

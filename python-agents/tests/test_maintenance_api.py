@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from agent_maintenance.device_client import DeviceServiceUnavailable
 from agent_maintenance.main import app
+from shared.llm_client import LLMClientError
 
 client = TestClient(app)
 
@@ -126,3 +127,103 @@ def test_cases_endpoint(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["case_id"] == "case-1"
+
+
+def _patch_health(monkeypatch, health_score):
+    """辅助：mock device_client.get_device 返回指定 healthScore。"""
+    monkeypatch.setattr(
+        "agent_maintenance.main.device_client.get_device",
+        AsyncMock(
+            return_value={
+                "id": 1,
+                "healthScore": health_score,
+                "status": "RUNNING",
+                "deviceName": "贴片机",
+            }
+        ),
+    )
+
+
+def test_health_score_100_returns_low(monkeypatch):
+    """healthScore=100 应映射为 risk_level=LOW。补齐 phase2 B-6 盲区。"""
+    _patch_health(monkeypatch, 100)
+
+    response = client.get("/maintenance/health/1")
+
+    assert response.status_code == 200
+    assert response.json()["risk_level"] == "LOW"
+
+
+def test_health_score_60_returns_medium(monkeypatch):
+    """healthScore=60 应映射为 risk_level=MEDIUM（边界值）。"""
+    _patch_health(monkeypatch, 60)
+
+    response = client.get("/maintenance/health/1")
+
+    assert response.status_code == 200
+    assert response.json()["risk_level"] == "MEDIUM"
+
+
+def test_health_score_30_returns_high(monkeypatch):
+    """healthScore=30 应映射为 risk_level=HIGH。"""
+    _patch_health(monkeypatch, 30)
+
+    response = client.get("/maintenance/health/1")
+
+    assert response.status_code == 200
+    assert response.json()["risk_level"] == "HIGH"
+
+
+def test_health_score_missing_returns_503(monkeypatch):
+    """healthScore 缺失（None）应抛 DeviceServiceUnavailable → 503。
+
+    main.py 第 37-43 行：int(None) 抛 TypeError → raise DeviceServiceUnavailable。
+    """
+    monkeypatch.setattr(
+        "agent_maintenance.main.device_client.get_device",
+        AsyncMock(
+            return_value={
+                "id": 1,
+                "healthScore": None,
+                "status": "RUNNING",
+                "deviceName": "贴片机",
+            }
+        ),
+    )
+
+    response = client.get("/maintenance/health/1")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["error"] == "device_service_unavailable"
+
+
+def test_diagnose_empty_symptom_returns_422():
+    """diagnose 时 symptom 为空字符串应触发 Pydantic 校验失败 → 422。
+
+    DiagnoseRequest.symptom 有 min_length=1 约束。
+    """
+    response = client.post(
+        "/maintenance/diagnose", json={"device_id": 1, "symptom": ""}
+    )
+
+    assert response.status_code == 422
+
+
+def test_diagnose_llm_error_returns_503(monkeypatch):
+    """diagnose 时 LLMClientError 应被异常处理器映射为 503。
+
+    补齐 phase2 B-4 盲区：FastAPI 异常处理路径未测。
+    """
+    monkeypatch.setattr(
+        "agent_maintenance.main.diagnose.diagnose",
+        AsyncMock(side_effect=LLMClientError("LLM timeout")),
+    )
+
+    response = client.post(
+        "/maintenance/diagnose", json={"device_id": 1, "symptom": "异响"}
+    )
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["error"] == "llm_unavailable"

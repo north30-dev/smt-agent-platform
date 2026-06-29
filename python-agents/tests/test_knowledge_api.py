@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock
 from fastapi.testclient import TestClient
 
 from agent_knowledge.main import app
+from shared.llm_client import LLMClientError
+from shared.vector_store import VectorStoreError
 
 client = TestClient(app)
 
@@ -103,3 +105,52 @@ def test_delete_endpoint(monkeypatch):
     data = response.json()
     assert data["success"] is True
     assert data["deleted_chunks"] == 3
+
+
+def test_ask_llm_unavailable_returns_503(monkeypatch):
+    """ask 时 LLMClientError 应被异常处理器映射为 503 + ErrorResponse。
+
+    补齐 phase2 报告 B-4 盲区：FastAPI 异常处理路径未测。
+    """
+    monkeypatch.setattr(
+        "agent_knowledge.main.rag_chain.ask",
+        AsyncMock(side_effect=LLMClientError("LLM timeout")),
+    )
+
+    response = client.post("/knowledge/ask", json={"question": "钢网清洁？"})
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["error"] == "llm_unavailable"
+    assert "LLM timeout" in data["message"]
+
+
+def test_ask_vector_store_error_returns_503(monkeypatch):
+    """ask 时 VectorStoreError 应被异常处理器映射为 503 + ErrorResponse。"""
+    monkeypatch.setattr(
+        "agent_knowledge.main.rag_chain.ask",
+        AsyncMock(side_effect=VectorStoreError("Milvus down")),
+    )
+
+    response = client.post("/knowledge/ask", json={"question": "钢网清洁？"})
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["error"] == "vector_store_unavailable"
+    assert "Milvus down" in data["message"]
+
+
+def test_upload_empty_file_returns_400():
+    """上传空文件应返回 400 + ErrorResponse。
+
+    不需要 mock：main.py upload 接口直接检查 content 为空。
+    """
+    response = client.post(
+        "/knowledge/upload",
+        files={"file": ("empty.txt", b"", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["error"] == "unsupported_file_type"
+    assert data["message"] == "上传文件不能为空"

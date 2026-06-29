@@ -110,3 +110,82 @@ async def test_predict_device_unavailable(monkeypatch):
 
     with pytest.raises(DeviceServiceUnavailable):
         await predict(1)
+
+
+def _make_datapoint(code: str = "TEMP-01") -> dict:
+    """构造一个 NUMBER 类型采集点配置。"""
+    return {
+        "id": 1,
+        "deviceId": 1,
+        "datapointCode": code,
+        "datapointName": "温度",
+        "nodePath": "/temp",
+        "dataType": "NUMBER",
+        "sampleIntervalMs": 86400000,
+    }
+
+
+def _make_seven_day_records(values: list[float], code: str = "TEMP-01") -> list[dict]:
+    """根据值列表构造 7 天跨度（每天一个点）的采集数据记录。"""
+    base = datetime(2026, 6, 21, 0, 0, 0, tzinfo=timezone.utc)
+    return [
+        _make_record(i, code, v, base + timedelta(days=i))
+        for i, v in enumerate(values)
+    ]
+
+
+async def test_predict_decreasing_trend(monkeypatch):
+    """值递减时应返回 trend=下降。补齐 phase2 B-5 盲区。"""
+    mock_device = MagicMock()
+    mock_device.get_device = AsyncMock(return_value={"id": 1, "deviceName": "贴片机"})
+    mock_device.list_datapoints = AsyncMock(return_value=[_make_datapoint()])
+    mock_device.get_device_data = AsyncMock(
+        return_value=_make_seven_day_records([76.0, 75.0, 74.0, 73.0, 72.0, 71.0, 70.0])
+    )
+    monkeypatch.setattr("agent_maintenance.predict.device_client", mock_device)
+
+    result = await predict(1)
+
+    assert result["data_sufficient"] is True
+    assert result["trend"] == "下降"
+
+
+async def test_predict_stable_trend(monkeypatch):
+    """值恒定时应返回 trend=平稳。"""
+    mock_device = MagicMock()
+    mock_device.get_device = AsyncMock(return_value={"id": 1, "deviceName": "贴片机"})
+    mock_device.list_datapoints = AsyncMock(return_value=[_make_datapoint()])
+    mock_device.get_device_data = AsyncMock(
+        return_value=_make_seven_day_records([73.0] * 7)
+    )
+    monkeypatch.setattr("agent_maintenance.predict.device_client", mock_device)
+
+    result = await predict(1)
+
+    assert result["data_sufficient"] is True
+    assert result["trend"] == "平稳"
+
+
+async def test_predict_forecast_hours_to_threshold(monkeypatch):
+    """构造已知斜率数据，验证 forecast.hours_to_threshold 数值计算。
+
+    数据：7 个点，每天 +1（70→76），slope=1.0，sample_interval=24h。
+    current_mean=73，TEMP max=80。
+    hours_to_threshold = (80-73)/1.0 * 24 = 168 小时。
+    """
+    mock_device = MagicMock()
+    mock_device.get_device = AsyncMock(return_value={"id": 1, "deviceName": "贴片机"})
+    mock_device.list_datapoints = AsyncMock(return_value=[_make_datapoint()])
+    mock_device.get_device_data = AsyncMock(
+        return_value=_make_seven_day_records([70.0, 71.0, 72.0, 73.0, 74.0, 75.0, 76.0])
+    )
+    monkeypatch.setattr("agent_maintenance.predict.device_client", mock_device)
+
+    result = await predict(1)
+
+    assert result["data_sufficient"] is True
+    assert result["forecast"] is not None
+    assert result["forecast"]["datapoint_code"] == "TEMP-01"
+    assert result["forecast"]["predicted_value"] == 80.0
+    # hours_to_threshold = (80-73)/1.0 * 24 = 168，允许浮点误差
+    assert abs(result["forecast"]["hours_to_threshold"] - 168.0) < 1.0

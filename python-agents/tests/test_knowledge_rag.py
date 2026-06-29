@@ -11,6 +11,7 @@ P0 B1+P0-5：rag_chain 全接口已改 async，元数据已迁移到 doc_meta_st
 - load_and_split → 同步 lambda（被 asyncio.to_thread 包装）
 """
 
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 from agent_knowledge.rag_chain import COLLECTION, ask, upload_document
@@ -93,3 +94,29 @@ async def test_upload_document(monkeypatch):
     mock_llm.embed.assert_called_once_with(["chunk1", "chunk2"])
     mock_vs.init_collections.assert_called_once_with(2)
     mock_vs.insert.assert_called_once()
+
+
+async def test_ask_latency_under_3s(monkeypatch):
+    """PRD §5 RAG 端到端 < 3 秒：mock 链路应在不超时情况下完成。
+
+    补齐 phase2 报告 B-1 盲区：性能断言零覆盖。
+    本用例验证 ask() 的执行时间断言逻辑，mock 立即返回，
+    实际生产延迟需由 LLM/Milvus 性能保证。
+    """
+    mock_vs = MagicMock()
+    mock_vs.count.return_value = 2
+    mock_vs.search.return_value = [
+        {"doc_id": "d1", "chunk_id": 0, "content": "钢网清洁", "score": 0.9}
+    ]
+    monkeypatch.setattr("agent_knowledge.rag_chain.vector_store", mock_vs)
+
+    mock_llm = MagicMock()
+    mock_llm.embed = AsyncMock(return_value=[[0.1, 0.2]])
+    mock_llm.chat = AsyncMock(return_value="答案")
+    monkeypatch.setattr("agent_knowledge.rag_chain.llm_client", mock_llm)
+
+    start = time.perf_counter()
+    await ask("钢网清洁频率？")
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 3.0, f"RAG ask() 耗时 {elapsed:.3f}s 超过 3s 阈值"

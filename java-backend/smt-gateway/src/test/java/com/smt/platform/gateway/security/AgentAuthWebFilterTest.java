@@ -74,4 +74,49 @@ class AgentAuthWebFilterTest {
                         .as("/api/device/** 不应被 AgentAuthWebFilter 拦截返回 401")
                         .isNotEqualTo(401));
     }
+
+    /**
+     * 补齐 phase2 B-10 盲区：maintenance 路由匹配守护。
+     * 合法 token 访问 /api/agent/maintenance/** 应被放行（非 401）。
+     */
+    @Test
+    void test_valid_token_passes_maintenance_route() {
+        String token = jwtUtil.generateToken("test-user", List.of("ADMIN"), 3600000L);
+        webTestClient.get().uri("/api/agent/maintenance/health/1")
+                .header("Authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().value(status -> assertThat(status)
+                        .as("合法 token 访问 maintenance 路由不应被 filter 拦截返回 401")
+                        .isNotEqualTo(401));
+    }
+
+    /**
+     * 补齐 S-SEC-4：过期 token 应返回 401。
+     */
+    @Test
+    void test_expired_token_returns_401() {
+        // expireMs 为负，生成的 token 立即过期
+        String expiredToken = jwtUtil.generateToken("test-user", List.of("ADMIN"), -1000L);
+        webTestClient.get().uri("/api/agent/knowledge/documents")
+                .header("Authorization", "Bearer " + expiredToken)
+                .exchange()
+                .expectStatus().isEqualTo(401)
+                .expectBody()
+                .jsonPath("$.error").isEqualTo("unauthorized")
+                .jsonPath("$.message").isEqualTo("token 无效或已过期");
+    }
+
+    /**
+     * 补齐 S-SEC-4：非 Bearer 前缀（如 Basic）应返回 401。
+     */
+    @Test
+    void test_non_bearer_prefix_returns_401() {
+        webTestClient.get().uri("/api/agent/knowledge/documents")
+                .header("Authorization", "Basic some-base64-credentials")
+                .exchange()
+                .expectStatus().isEqualTo(401)
+                .expectBody()
+                .jsonPath("$.error").isEqualTo("unauthorized")
+                .jsonPath("$.message").isEqualTo("token 缺失");
+    }
 }
