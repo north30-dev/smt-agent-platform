@@ -25,7 +25,7 @@ _WINDOW_SIZE = 100
 _TREND_THRESHOLD = 0.01
 
 
-def predict(device_id: int) -> dict:
+async def predict(device_id: int) -> dict:
     """预测性维护主流程。
 
     1. 获取设备信息与采集点列表
@@ -40,10 +40,10 @@ def predict(device_id: int) -> dict:
         {trend, threshold_alerts, forecast, recommendation, data_sufficient}
     """
     # 1. 获取设备信息（同时验证设备存在）
-    device_client.get_device(device_id)
+    await device_client.get_device(device_id)
 
     # 2. 获取采集点列表
-    datapoints = device_client.list_datapoints(device_id)
+    datapoints = await device_client.list_datapoints(device_id)
     number_points = [
         dp for dp in datapoints if str(dp.get("dataType", "")).upper() == "NUMBER"
     ]
@@ -66,7 +66,7 @@ def predict(device_id: int) -> dict:
         code = dp.get("datapointCode") or ""
         if not code:
             continue
-        records = device_client.get_device_data(
+        records = await device_client.get_device_data(
             device_id, code, start_time, end_time
         )
         points = _parse_points(records)

@@ -19,7 +19,7 @@
 
 **当前进度一句话**：Phase 2（知识助手 Agent + 设备运维 Agent）代码层面已基本交付完成，Python 智能体层落地 2 个 Agent、8 个 REST 接口、26 个测试用例全绿；Java 侧 52 个测试用例未破坏（Phase 1 既有回归）；尚未合并至 `main` 分支，端到端运行验证因本机 Docker Hub 不可达而跳过。
 
-**已交付**：`python-agents/` 全量工程（Poetry + Python 3.14 + FastAPI + Pydantic v2 + httpx + pymilvus）、`shared/` 公共模块（`llm_client` / `vector_store` / `config` / `prompts`）、`agent-knowledge`（端口 8004，文档上传 + RAG 问答 + 文档管理）、`agent-maintenance`（端口 8002，健康分析 + 故障诊断 + 预测性维护 v1 + 案例录入）、Milvus + etcd + minio 中间件编排、smt-gateway 路由扩展、OpenAPI 契约、启动脚本补 Python 段。
+**已交付**：`python-agents/` 全量工程（Poetry + Python 3.12 + FastAPI + Pydantic v2 + httpx + pymilvus）、`shared/` 公共模块（`llm_client` / `vector_store` / `config` / `prompts`）、`agent-knowledge`（端口 8004，文档上传 + RAG 问答 + 文档管理）、`agent-maintenance`（端口 8002，健康分析 + 故障诊断 + 预测性维护 v1 + 案例录入）、Milvus + etcd + minio 中间件编排、smt-gateway 路由扩展、OpenAPI 契约、启动脚本补 Python 段。
 
 **未交付**（属后续阶段）：质量分析 Agent、调度 Agent、执行协同 Agent（Phase 3-4）；LangGraph 多 Agent 编排（Phase 3）；Kafka 事件总线（Phase 4）；C++ 原生层（Phase 5）；前端可视化（Phase 4）；gRPC 跨语言契约（Phase 3+）；深度学习 PHM 模型（Phase 5+）；网关鉴权、可观测性、重试熔断等非功能性改造（Phase 2 收尾 / Phase 3 起步）。
 
@@ -45,7 +45,7 @@
 |---|---|---|---|
 | 1 | docker-compose 追加 Milvus + etcd + minio 三服务，19530 端口暴露，含健康检查 | ✅ | 既有 PG/Redis/Kafka/Mosquitto 定义未修改 |
 | 2 | `docker-compose/.env.example` 追加 Milvus 相关占位变量 | ✅ | 无硬编码密码 |
-| 3 | `pyproject.toml` Poetry + Python 3.14 依赖清单完整 | ✅ | fastapi/uvicorn/pymilvus/pypdf/python-docx/pydantic v2 等 |
+| 3 | `pyproject.toml` Poetry + Python 3.12 依赖清单完整 | ✅ | fastapi/uvicorn/pymilvus/pypdf/python-docx/pydantic v2 等 |
 | 4 | `python-agents/.env.example` 占位完整 | ✅ | LLM_API_KEY / MILVUS_HOST / DEVICE_SERVICE_BASE_URL |
 | 5 | `python-agents/README.md` 端口映射与启动说明 | ✅ | 8002 / 8004 双 Agent |
 | 6 | `.gitignore` 忽略 `.env`、`.venv/`、`__pycache__/` | ✅ | |
@@ -185,7 +185,7 @@ graph TB
 
 | 技术 | 版本 | 用途 | 文件 |
 |---|---|---|---|
-| Python | 3.14 | 运行时 | [`pyproject.toml`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/pyproject.toml) |
+| Python | 3.12 | 运行时 | [`pyproject.toml`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/pyproject.toml) |
 | FastAPI | ^0.110.0 | Agent API 服务框架 | [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-knowledge/main.py) |
 | uvicorn[standard] | ^0.29.0 | ASGI 服务器 | |
 | Pydantic | ^2.6.0 | 请求/响应模型校验 | [`models.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-knowledge/models.py) |
@@ -543,7 +543,7 @@ graph BT
 
 ```
 python-agents/
-├── pyproject.toml                      Poetry 依赖管理（Python 3.14）
+├── pyproject.toml                      Poetry 依赖管理（Python 3.12）
 ├── .env.example                        环境变量占位
 ├── README.md                           端口映射与启动说明
 ├── shared/                             公共模块（被两 Agent 共享）

@@ -5,7 +5,10 @@
 错误不在本模块捕获，统一交由 main.py 异常处理器兜底。
 """
 
+import asyncio
 import json
+import threading
+from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
 
@@ -21,11 +24,12 @@ COLLECTION = "smt_fault_cases"
 # Prompt 模板文件
 _PROMPT_FILE = Path(__file__).parent.parent / "shared" / "prompts" / "system_prompt.yaml"
 
-# 模块级懒初始化标志，避免每次写案例都重复建表建索引
+# 模块级懒初始化标志与保护锁（P0 B2：防止多线程并发 check-then-set 竞态）
 _initialized = False
+_init_lock = threading.Lock()
 
 
-def create_case(device_type: str, symptom: str, root_cause: str, solution: str) -> str:
+async def create_case(device_type: str, symptom: str, root_cause: str, solution: str) -> str:
     """录入故障案例：拼案例文本 → embed → insert。
 
     Args:
@@ -48,17 +52,19 @@ def create_case(device_type: str, symptom: str, root_cause: str, solution: str) 
     )
     chunks = [case_text]
 
-    vectors = llm_client.embed(chunks)
+    vectors = await llm_client.embed(chunks)
 
     if not _initialized:
-        vector_store.init_collections(len(vectors[0]))
-        _initialized = True
+        with _init_lock:
+            if not _initialized:
+                await asyncio.to_thread(vector_store.init_collections, len(vectors[0]))
+                _initialized = True
 
-    vector_store.insert(COLLECTION, case_id, chunks, vectors)
+    await asyncio.to_thread(vector_store.insert, COLLECTION, case_id, chunks, vectors)
     return case_id
 
 
-def diagnose(device_id: int, symptom: str) -> dict:
+async def diagnose(device_id: int, symptom: str) -> dict:
     """故障诊断流程。
 
     1. 获取设备信息
@@ -74,11 +80,11 @@ def diagnose(device_id: int, symptom: str) -> dict:
         {root_causes, repair_suggestions, similar_cases}
     """
     # 1. 获取设备信息
-    device_info = device_client.get_device(device_id)
+    device_info = await device_client.get_device(device_id)
 
     # 2. 检索相似历史案例
-    query_vector = llm_client.embed([symptom])[0]
-    sources = vector_store.search(COLLECTION, query_vector, top_k=3)
+    query_vector = (await llm_client.embed([symptom]))[0]
+    sources = await asyncio.to_thread(vector_store.search, COLLECTION, query_vector, 3)
     similar_cases = _parse_similar_cases(sources)
 
     # 3. 拼 prompt 并调用大模型
@@ -96,7 +102,7 @@ def diagnose(device_id: int, symptom: str) -> dict:
         '{"root_causes": ["根因1", "根因2"], "repair_suggestions": ["建议1", "建议2"]}'
     )
 
-    raw_text = llm_client.chat(
+    raw_text = await llm_client.chat(
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
@@ -113,8 +119,12 @@ def diagnose(device_id: int, symptom: str) -> dict:
     }
 
 
+@lru_cache(maxsize=1)
 def _load_prompts() -> tuple[str, str]:
-    """读取 system_prompt.yaml 中的 maintenance.system 与 diagnose_template。"""
+    """读取 system_prompt.yaml 中的 maintenance.system 与 diagnose_template。
+
+    Prompt 文件运行期不变，用 lru_cache 避免每次请求重复读盘（P0 M5）。
+    """
     with _PROMPT_FILE.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     maintenance = data["maintenance"]

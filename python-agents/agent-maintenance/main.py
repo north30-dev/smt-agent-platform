@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from shared.llm_client import LLMClientError
+from shared.models import ErrorResponse
 from shared.vector_store import VectorStoreError
 
 from . import diagnose, predict
@@ -17,7 +18,6 @@ from .models import (
     CaseCreateResponse,
     DiagnoseRequest,
     DiagnoseResponse,
-    ErrorResponse,
     HealthResponse,
     PredictResponse,
 )
@@ -30,10 +30,17 @@ app = FastAPI(
 
 
 @app.get("/maintenance/health/{device_id}", response_model=HealthResponse)
-def health(device_id: int):
+async def health(device_id: int):
     """设备健康评估：读取设备健康评分，计算风险等级。"""
-    device = device_client.get_device(device_id)
-    health_score = int(device.get("healthScore") or 0)
+    device = await device_client.get_device(device_id)
+    raw_score = device.get("healthScore")
+    try:
+        health_score = int(raw_score)
+    except (TypeError, ValueError):
+        # 上游数据异常 → 503 而非 400（P0 M6）
+        raise DeviceServiceUnavailable(
+            f"device-service 返回的 healthScore 非法: {raw_score!r}"
+        )
     status = str(device.get("status") or "UNKNOWN")
 
     if health_score >= 85:
@@ -56,23 +63,23 @@ def health(device_id: int):
 
 
 @app.post("/maintenance/diagnose", response_model=DiagnoseResponse)
-def diagnose_fault(req: DiagnoseRequest):
+async def diagnose_fault(req: DiagnoseRequest):
     """故障诊断：基于设备信息与相似案例生成根因假设与维修建议。"""
-    result = diagnose.diagnose(req.device_id, req.symptom)
+    result = await diagnose.diagnose(req.device_id, req.symptom)
     return DiagnoseResponse(**result)
 
 
 @app.get("/maintenance/predict/{device_id}", response_model=PredictResponse)
-def predict_device(device_id: int):
+async def predict_device(device_id: int):
     """预测性维护：基于近 7 天采集数据给出趋势与告警。"""
-    result = predict.predict(device_id)
+    result = await predict.predict(device_id)
     return PredictResponse(**result)
 
 
 @app.post("/maintenance/cases", response_model=CaseCreateResponse)
-def create_case(req: CaseCreateRequest):
+async def create_case(req: CaseCreateRequest):
     """录入故障案例到向量库，供后续诊断检索。"""
-    case_id = diagnose.create_case(
+    case_id = await diagnose.create_case(
         device_type=req.device_type,
         symptom=req.symptom,
         root_cause=req.root_cause,

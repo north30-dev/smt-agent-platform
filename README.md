@@ -7,7 +7,7 @@
 | 层 | 技术 | 版本 |
 |----|------|------|
 | Java 后端 | Spring Boot / Spring Cloud + Maven 多模块 | Java 21 |
-| Python 智能体 | LangChain / LangGraph + FastAPI + Poetry | Python 3.14 |
+| Python 智能体 | LangChain / LangGraph + FastAPI + Poetry | Python 3.12 |
 | C++ 原生层 | CMake + pybind11 + JNI（仅输出动态库） | C++17 |
 | 前端 | React + TypeScript + Vite + Ant Design + ECharts | React 18 / Vite 5 |
 | 中间件 | Kafka、Redis、PostgreSQL、InfluxDB、Milvus | docker-compose 编排 |

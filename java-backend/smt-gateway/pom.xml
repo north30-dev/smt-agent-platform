@@ -27,6 +27,19 @@
             <groupId>com.smt.platform</groupId>
             <artifactId>smt-common</artifactId>
         </dependency>
+
+        <!-- 测试依赖（P0-4：AgentAuthWebFilter 单测需要） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- reactive 测试支持：WebTestClient 在 spring-test 中，但 io.projectreactor 提供异步断言支持 -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

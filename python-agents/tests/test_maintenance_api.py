@@ -2,7 +2,12 @@
 
 使用 TestClient 调用真实路由，通过 monkeypatch 替换 main 模块中
 device_client / diagnose / predict 的引用，不触达真实服务。
+
+P0 B1：main 路由与被 mock 的函数均已改 async，TestClient 同步客户端内部自管事件循环，
+测试函数保持 def，但 mock 必须用 AsyncMock 以匹配 await 语义。
 """
+
+from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
@@ -16,12 +21,14 @@ def test_health_endpoint(monkeypatch):
     """健康评估接口应返回 200，healthScore=85 对应 risk_level=LOW。"""
     monkeypatch.setattr(
         "agent_maintenance.main.device_client.get_device",
-        lambda device_id: {
-            "id": 1,
-            "healthScore": 85,
-            "status": "RUNNING",
-            "deviceName": "贴片机",
-        },
+        AsyncMock(
+            return_value={
+                "id": 1,
+                "healthScore": 85,
+                "status": "RUNNING",
+                "deviceName": "贴片机",
+            }
+        ),
     )
 
     response = client.get("/maintenance/health/1")
@@ -36,11 +43,10 @@ def test_health_endpoint(monkeypatch):
 
 def test_health_device_unavailable(monkeypatch):
     """device-service 不可达时应返回 503 与 ErrorResponse。"""
-
-    def _raise(device_id):
-        raise DeviceServiceUnavailable("connection refused")
-
-    monkeypatch.setattr("agent_maintenance.main.device_client.get_device", _raise)
+    monkeypatch.setattr(
+        "agent_maintenance.main.device_client.get_device",
+        AsyncMock(side_effect=DeviceServiceUnavailable("connection refused")),
+    )
 
     response = client.get("/maintenance/health/1")
 
@@ -54,11 +60,13 @@ def test_diagnose_endpoint(monkeypatch):
     """故障诊断接口应返回 200 与 DiagnoseResponse 结构。"""
     monkeypatch.setattr(
         "agent_maintenance.main.diagnose.diagnose",
-        lambda device_id, symptom: {
-            "root_causes": ["x"],
-            "repair_suggestions": ["y"],
-            "similar_cases": [],
-        },
+        AsyncMock(
+            return_value={
+                "root_causes": ["x"],
+                "repair_suggestions": ["y"],
+                "similar_cases": [],
+            }
+        ),
     )
 
     response = client.post(
@@ -76,13 +84,15 @@ def test_predict_endpoint(monkeypatch):
     """预测性维护接口应返回 200 与 PredictResponse 结构。"""
     monkeypatch.setattr(
         "agent_maintenance.main.predict.predict",
-        lambda device_id: {
-            "trend": "上升",
-            "threshold_alerts": [],
-            "forecast": None,
-            "recommendation": "继续监控",
-            "data_sufficient": True,
-        },
+        AsyncMock(
+            return_value={
+                "trend": "上升",
+                "threshold_alerts": [],
+                "forecast": None,
+                "recommendation": "继续监控",
+                "data_sufficient": True,
+            }
+        ),
     )
 
     response = client.get("/maintenance/predict/1")
@@ -100,7 +110,7 @@ def test_cases_endpoint(monkeypatch):
     """案例录入接口应返回 200 与 case_id。"""
     monkeypatch.setattr(
         "agent_maintenance.main.diagnose.create_case",
-        lambda device_type, symptom, root_cause, solution: "case-1",
+        AsyncMock(return_value="case-1"),
     )
 
     response = client.post(

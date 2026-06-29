@@ -7,7 +7,7 @@
 # 📁 项目目录结构完整文档
 
 ## 项目名称：`smt-agent-platform`  
-**技术栈**：Java 21 (Spring Boot) + Python 3.14 (LangChain) + C++17 (CMake) + React/TS (Vite)  
+**技术栈**：Java 21 (Spring Boot) + Python 3.12 (LangChain) + C++17 (CMake) + React/TS (Vite)  
 **适用场景**：SMT贴片产线智能运维与调度（工业级Agent平台）
 
 ---

@@ -3,20 +3,25 @@
 使用 monkeypatch 替换 diagnose 模块内已 import 的 shared 引用
 （llm_client / vector_store）与 device_client，不依赖真实 Milvus、
 大模型与 Java device-service。
+
+P0 B1：diagnose.create_case/diagnose 已改 async，测试同步改 async def + AsyncMock。
+- llm_client.embed/chat → AsyncMock（被 await 调用）
+- device_client.get_device → AsyncMock（被 await 调用）
+- vector_store.insert/init_collections/search → MagicMock（被 asyncio.to_thread 包装为同步）
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from agent_maintenance.diagnose import COLLECTION, create_case, diagnose
 
 
-def test_create_case(monkeypatch):
+async def test_create_case(monkeypatch):
     """录入案例应串联 embed → init_collections → insert，并返回非空 case_id。"""
     # 重置懒初始化标志，保证本用例触发 init_collections
     monkeypatch.setattr("agent_maintenance.diagnose._initialized", False)
 
     mock_llm = MagicMock()
-    mock_llm.embed.return_value = [[0.1, 0.2]]
+    mock_llm.embed = AsyncMock(return_value=[[0.1, 0.2]])
     monkeypatch.setattr("agent_maintenance.diagnose.llm_client", mock_llm)
 
     mock_vs = MagicMock()
@@ -24,7 +29,7 @@ def test_create_case(monkeypatch):
     mock_vs.count.return_value = 1
     monkeypatch.setattr("agent_maintenance.diagnose.vector_store", mock_vs)
 
-    case_id = create_case("MOUNTER", "异响", "轴承磨损", "更换轴承")
+    case_id = await create_case("MOUNTER", "异响", "轴承磨损", "更换轴承")
 
     assert case_id.startswith("case-")
     assert len(case_id) == len("case-") + 8
@@ -39,16 +44,16 @@ def test_create_case(monkeypatch):
     assert "MOUNTER" in args[2][0]
 
 
-def test_diagnose_success(monkeypatch):
+async def test_diagnose_success(monkeypatch):
     """诊断应串联 get_device → embed → search → chat，并解析 LLM 输出。"""
     mock_device = MagicMock()
-    mock_device.get_device.return_value = {"id": 1, "deviceName": "贴片机"}
+    mock_device.get_device = AsyncMock(return_value={"id": 1, "deviceName": "贴片机"})
     monkeypatch.setattr("agent_maintenance.diagnose.device_client", mock_device)
 
     mock_llm = MagicMock()
-    mock_llm.embed.return_value = [[0.1, 0.2]]
-    mock_llm.chat.return_value = (
-        '{"root_causes": ["轴承磨损"], "repair_suggestions": ["更换轴承"]}'
+    mock_llm.embed = AsyncMock(return_value=[[0.1, 0.2]])
+    mock_llm.chat = AsyncMock(
+        return_value='{"root_causes": ["轴承磨损"], "repair_suggestions": ["更换轴承"]}'
     )
     monkeypatch.setattr("agent_maintenance.diagnose.llm_client", mock_llm)
 
@@ -63,7 +68,7 @@ def test_diagnose_success(monkeypatch):
     ]
     monkeypatch.setattr("agent_maintenance.diagnose.vector_store", mock_vs)
 
-    result = diagnose(1, "异响")
+    result = await diagnose(1, "异响")
 
     assert result["root_causes"] == ["轴承磨损"]
     assert result["repair_suggestions"] == ["更换轴承"]
@@ -89,22 +94,22 @@ def test_diagnose_success(monkeypatch):
     assert "root_causes" in messages[1]["content"]
 
 
-def test_diagnose_llm_not_json(monkeypatch):
+async def test_diagnose_llm_not_json(monkeypatch):
     """LLM 输出非 JSON 时应降级为 root_causes=[raw_text]、repair_suggestions=[]。"""
     mock_device = MagicMock()
-    mock_device.get_device.return_value = {"id": 1, "deviceName": "贴片机"}
+    mock_device.get_device = AsyncMock(return_value={"id": 1, "deviceName": "贴片机"})
     monkeypatch.setattr("agent_maintenance.diagnose.device_client", mock_device)
 
     mock_llm = MagicMock()
-    mock_llm.embed.return_value = [[0.1, 0.2]]
-    mock_llm.chat.return_value = "无法解析"
+    mock_llm.embed = AsyncMock(return_value=[[0.1, 0.2]])
+    mock_llm.chat = AsyncMock(return_value="无法解析")
     monkeypatch.setattr("agent_maintenance.diagnose.llm_client", mock_llm)
 
     mock_vs = MagicMock()
     mock_vs.search.return_value = []
     monkeypatch.setattr("agent_maintenance.diagnose.vector_store", mock_vs)
 
-    result = diagnose(1, "异响")
+    result = await diagnose(1, "异响")
 
     assert result["root_causes"] == ["无法解析"]
     assert result["repair_suggestions"] == []

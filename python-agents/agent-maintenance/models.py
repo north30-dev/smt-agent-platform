@@ -83,10 +83,3 @@ class CaseCreateResponse(BaseModel):
     """故障案例录入响应。"""
 
     case_id: str = Field(..., description="生成的案例 ID")
-
-
-class ErrorResponse(BaseModel):
-    """统一错误响应。"""
-
-    error: str = Field(..., description="错误码")
-    message: str = Field(..., description="错误描述")

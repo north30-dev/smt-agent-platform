@@ -6,9 +6,9 @@
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 
 from shared.llm_client import LLMClientError
+from shared.models import ErrorResponse
 from shared.vector_store import VectorStoreError
 
 from . import rag_chain
@@ -17,7 +17,6 @@ from .models import (
     AskResponse,
     DeleteResponse,
     DocumentInfo,
-    ErrorResponse,
     SourceItem,
     UploadResponse,
 )
@@ -41,14 +40,14 @@ async def upload(file: UploadFile = File(...)):
             ).model_dump(),
         )
     filename = file.filename or "unknown"
-    doc_id, chunk_count = rag_chain.upload_document(content, filename)
+    doc_id, chunk_count = await rag_chain.upload_document(content, filename)
     return UploadResponse(doc_id=doc_id, doc_name=filename, chunk_count=chunk_count)
 
 
 @app.post("/knowledge/ask", response_model=AskResponse)
-def ask(req: AskRequest):
+async def ask(req: AskRequest):
     """基于知识库的 RAG 检索增强问答。"""
-    answer, sources = rag_chain.ask(req.question)
+    answer, sources = await rag_chain.ask(req.question)
     source_items = [
         SourceItem(
             doc_id=s["doc_id"],
@@ -62,15 +61,15 @@ def ask(req: AskRequest):
 
 
 @app.get("/knowledge/documents", response_model=list[DocumentInfo])
-def list_documents():
+async def list_documents():
     """查询知识库全部文档元信息。"""
-    return [DocumentInfo(**doc) for doc in rag_chain.list_documents()]
+    return [DocumentInfo(**doc) for doc in await rag_chain.list_documents()]
 
 
 @app.delete("/knowledge/documents/{doc_id}", response_model=DeleteResponse)
-def delete_document(doc_id: str):
+async def delete_document(doc_id: str):
     """根据 doc_id 删除文档及其全部分块向量。"""
-    deleted = rag_chain.delete_document(doc_id)
+    deleted = await rag_chain.delete_document(doc_id)
     return DeleteResponse(success=True, deleted_chunks=deleted)
 
 

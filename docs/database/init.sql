@@ -89,3 +89,17 @@ CREATE INDEX IF NOT EXISTS idx_device_data_point_device_id ON device_data_point 
 CREATE INDEX IF NOT EXISTS idx_device_data_query ON device_data (device_id, datapoint_code, timestamp);
 CREATE INDEX IF NOT EXISTS idx_device_data_timestamp ON device_data (timestamp);
 
+-- -----------------------------------------------------------------------------
+-- 知识库文档元数据表（Phase 2 P0-5：从 doc_meta.json 文件持久化迁移到 PG）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS doc_meta (
+    doc_id       VARCHAR(256) PRIMARY KEY,
+    doc_name     VARCHAR(512) NOT NULL,
+    create_time  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE doc_meta IS '知识库文档元数据表（Phase 2 P0-5 从文件迁移）';
+COMMENT ON COLUMN doc_meta.doc_id IS '文档唯一标识（与 Milvus 中 doc_id 对齐）';
+COMMENT ON COLUMN doc_meta.doc_name IS '原始文件名';
+COMMENT ON COLUMN doc_meta.create_time IS '入库时间';
+

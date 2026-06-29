@@ -2,6 +2,8 @@
 
 封装设备信息查询、采集点列表、采集点历史数据查询三类接口。
 错误统一抛出 DeviceServiceUnavailable，由 main.py 异常处理器兜底。
+
+P0 B1：全接口改 async，使用 httpx.AsyncClient 避免阻塞 uvicorn worker 事件循环。
 """
 
 import httpx
@@ -14,7 +16,7 @@ class DeviceServiceUnavailable(Exception):
 
 
 class DeviceClient:
-    """device-service 同步 HTTP 客户端。"""
+    """device-service 异步 HTTP 客户端。"""
 
     def __init__(self, base_url: str | None = None):
         """初始化客户端。
@@ -23,9 +25,9 @@ class DeviceClient:
             base_url: device-service 基地址，默认从 settings.device_service_base_url 取。
         """
         self._base_url = (base_url or settings.device_service_base_url).rstrip("/")
-        self._client = httpx.Client(timeout=10.0)
+        self._client = httpx.AsyncClient(timeout=10.0)
 
-    def _request(self, path: str, params: dict | None = None) -> dict:
+    async def _request(self, path: str, params: dict | None = None) -> dict:
         """统一请求与响应解析。
 
         Returns:
@@ -33,7 +35,7 @@ class DeviceClient:
         """
         url = f"{self._base_url}{path}"
         try:
-            resp = self._client.get(url, params=params)
+            resp = await self._client.get(url, params=params)
             resp.raise_for_status()
         except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as exc:
             raise DeviceServiceUnavailable(str(exc)) from exc
@@ -49,11 +51,11 @@ class DeviceClient:
             )
         return data["data"]
 
-    def get_device(self, device_id: int) -> dict:
+    async def get_device(self, device_id: int) -> dict:
         """GET /api/device/{id}，返回设备信息。"""
-        return self._request(f"/api/device/{device_id}")
+        return await self._request(f"/api/device/{device_id}")
 
-    def get_device_data(
+    async def get_device_data(
         self,
         device_id: int,
         datapoint_code: str,
@@ -62,7 +64,7 @@ class DeviceClient:
         size: int = 1000,
     ) -> list[dict]:
         """GET /api/device/{id}/data?...，返回 records 列表。"""
-        data = self._request(
+        data = await self._request(
             f"/api/device/{device_id}/data",
             params={
                 "datapointCode": datapoint_code,
@@ -77,9 +79,9 @@ class DeviceClient:
         records = data.get("records")
         return records or []
 
-    def list_datapoints(self, device_id: int) -> list[dict]:
+    async def list_datapoints(self, device_id: int) -> list[dict]:
         """GET /api/device/{id}/datapoints，返回采集点列表。"""
-        data = self._request(f"/api/device/{device_id}/datapoints")
+        data = await self._request(f"/api/device/{device_id}/datapoints")
         if data is None:
             return []
         return data

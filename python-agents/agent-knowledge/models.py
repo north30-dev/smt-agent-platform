@@ -50,10 +50,3 @@ class DeleteResponse(BaseModel):
 
     success: bool = Field(..., description="是否删除成功")
     deleted_chunks: int = Field(..., description="实际删除的分块数量")
-
-
-class ErrorResponse(BaseModel):
-    """统一错误响应。"""
-
-    error: str = Field(..., description="错误码")
-    message: str = Field(..., description="错误描述")

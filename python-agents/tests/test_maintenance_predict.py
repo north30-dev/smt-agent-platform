@@ -2,10 +2,13 @@
 
 使用 monkeypatch 替换 predict 模块内的 device_client 引用，
 不触达真实 Java device-service。
+
+P0 B1：predict.predict 已改 async，device_client 三方法已改 async，
+测试同步改 async def + AsyncMock。
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -24,21 +27,23 @@ def _make_record(idx: int, code: str, value: float, ts: datetime) -> dict:
     }
 
 
-def test_predict_data_insufficient(monkeypatch):
+async def test_predict_data_insufficient(monkeypatch):
     """数据时间跨度不足 24 小时应返回 data_sufficient=False。"""
     mock_device = MagicMock()
-    mock_device.get_device.return_value = {"id": 1, "deviceName": "贴片机"}
-    mock_device.list_datapoints.return_value = [
-        {
-            "id": 1,
-            "deviceId": 1,
-            "datapointCode": "TEMP-01",
-            "datapointName": "温度",
-            "nodePath": "/temp",
-            "dataType": "NUMBER",
-            "sampleIntervalMs": 60000,
-        }
-    ]
+    mock_device.get_device = AsyncMock(return_value={"id": 1, "deviceName": "贴片机"})
+    mock_device.list_datapoints = AsyncMock(
+        return_value=[
+            {
+                "id": 1,
+                "deviceId": 1,
+                "datapointCode": "TEMP-01",
+                "datapointName": "温度",
+                "nodePath": "/temp",
+                "dataType": "NUMBER",
+                "sampleIntervalMs": 60000,
+            }
+        ]
+    )
     # 3 条数据，跨度 2 小时（< 24h）
     base = datetime(2026, 6, 28, 0, 0, 0, tzinfo=timezone.utc)
     records = [
@@ -46,10 +51,10 @@ def test_predict_data_insufficient(monkeypatch):
         _make_record(1, "TEMP-01", 71.0, base + timedelta(hours=1)),
         _make_record(2, "TEMP-01", 72.0, base + timedelta(hours=2)),
     ]
-    mock_device.get_device_data.return_value = records
+    mock_device.get_device_data = AsyncMock(return_value=records)
     monkeypatch.setattr("agent_maintenance.predict.device_client", mock_device)
 
-    result = predict(1)
+    result = await predict(1)
 
     assert result["data_sufficient"] is False
     assert result["trend"] == "数据不足"
@@ -58,31 +63,33 @@ def test_predict_data_insufficient(monkeypatch):
     assert result["forecast"] is None
 
 
-def test_predict_with_trend(monkeypatch):
+async def test_predict_with_trend(monkeypatch):
     """7 天温度数据呈上升趋势应返回 trend=上升 并产生告警或预测。"""
     mock_device = MagicMock()
-    mock_device.get_device.return_value = {"id": 1, "deviceName": "贴片机"}
-    mock_device.list_datapoints.return_value = [
-        {
-            "id": 1,
-            "deviceId": 1,
-            "datapointCode": "TEMP-01",
-            "datapointName": "温度",
-            "nodePath": "/temp",
-            "dataType": "NUMBER",
-            "sampleIntervalMs": 86400000,
-        }
-    ]
+    mock_device.get_device = AsyncMock(return_value={"id": 1, "deviceName": "贴片机"})
+    mock_device.list_datapoints = AsyncMock(
+        return_value=[
+            {
+                "id": 1,
+                "deviceId": 1,
+                "datapointCode": "TEMP-01",
+                "datapointName": "温度",
+                "nodePath": "/temp",
+                "dataType": "NUMBER",
+                "sampleIntervalMs": 86400000,
+            }
+        ]
+    )
     # 7 条数据，每天一条，跨度 6 天（>= 24h），值递增 70→82
     base = datetime(2026, 6, 21, 0, 0, 0, tzinfo=timezone.utc)
     records = [
         _make_record(i, "TEMP-01", 70.0 + i * 2, base + timedelta(days=i))
         for i in range(7)
     ]
-    mock_device.get_device_data.return_value = records
+    mock_device.get_device_data = AsyncMock(return_value=records)
     monkeypatch.setattr("agent_maintenance.predict.device_client", mock_device)
 
-    result = predict(1)
+    result = await predict(1)
 
     assert result["data_sufficient"] is True
     assert result["trend"] == "上升"
@@ -95,11 +102,11 @@ def test_predict_with_trend(monkeypatch):
         assert alert["threshold"] == 80.0
 
 
-def test_predict_device_unavailable(monkeypatch):
+async def test_predict_device_unavailable(monkeypatch):
     """device-service 不可达时应抛出 DeviceServiceUnavailable。"""
     mock_device = MagicMock()
-    mock_device.get_device.side_effect = DeviceServiceUnavailable("connection refused")
+    mock_device.get_device = AsyncMock(side_effect=DeviceServiceUnavailable("connection refused"))
     monkeypatch.setattr("agent_maintenance.predict.device_client", mock_device)
 
     with pytest.raises(DeviceServiceUnavailable):
-        predict(1)
+        await predict(1)

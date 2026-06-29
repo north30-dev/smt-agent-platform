@@ -2,6 +2,8 @@
 
 封装 OpenAI 兼容的 chat 与 embedding 接口。
 按 AGENTS.md §3.2 要求，禁止在各 Agent 内直接 new client，统一走本模块。
+
+P0 B1：全接口改 async，使用 httpx.AsyncClient 避免阻塞 uvicorn worker 事件循环。
 """
 
 import httpx
@@ -18,7 +20,7 @@ def _headers() -> dict:
     return {"Authorization": f"Bearer {settings.llm_api_key}"}
 
 
-def chat(messages: list[dict], temperature: float = 0.3) -> str:
+async def chat(messages: list[dict], temperature: float = 0.3) -> str:
     """调用大模型对话接口。
 
     Args:
@@ -39,8 +41,8 @@ def chat(messages: list[dict], temperature: float = 0.3) -> str:
         "temperature": temperature,
     }
     try:
-        with httpx.Client(timeout=60) as client:
-            resp = client.post(url, json=payload, headers=_headers())
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(url, json=payload, headers=_headers())
     except httpx.HTTPError as exc:
         raise LLMClientError(f"调用大模型对话接口失败：{exc}") from exc
 
@@ -55,7 +57,7 @@ def chat(messages: list[dict], temperature: float = 0.3) -> str:
         raise LLMClientError(f"解析大模型对话响应失败：{exc}") from exc
 
 
-def embed(texts: list[str]) -> list[list[float]]:
+async def embed(texts: list[str]) -> list[list[float]]:
     """调用 embedding 接口。
 
     Args:
@@ -70,8 +72,8 @@ def embed(texts: list[str]) -> list[list[float]]:
     url = f"{settings.llm_base_url.rstrip('/')}/embeddings"
     payload = {"model": settings.llm_embed_model, "input": texts}
     try:
-        with httpx.Client(timeout=60) as client:
-            resp = client.post(url, json=payload, headers=_headers())
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(url, json=payload, headers=_headers())
     except httpx.HTTPError as exc:
         raise LLMClientError(f"调用 embedding 接口失败：{exc}") from exc
 

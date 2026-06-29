@@ -4,6 +4,8 @@
 提供 collection 初始化、批量插入、向量检索、按文档删除、文档列表、条数统计等同步能力。
 """
 
+import threading
+
 from pymilvus import (
     Collection,
     CollectionSchema,
@@ -23,24 +25,28 @@ class VectorStoreError(Exception):
 # 受管理的 collection 名称
 COLLECTIONS = ("smt_knowledge", "smt_fault_cases")
 
-# 模块级连接单例标志
+# 模块级连接单例标志与保护锁（P0 B2：防止多线程并发 check-then-set 竞态）
 _connected = False
+_connect_lock = threading.Lock()
 
 
 def _ensure_connect() -> None:
-    """懒加载 Milvus 连接（模块级单例）。"""
+    """懒加载 Milvus 连接（模块级单例，双重检查加锁）。"""
     global _connected
     if _connected:
         return
-    try:
-        connections.connect(
-            alias="default",
-            host=settings.milvus_host,
-            port=str(settings.milvus_port),
-        )
-    except Exception as exc:
-        raise VectorStoreError(f"连接 Milvus 失败：{exc}") from exc
-    _connected = True
+    with _connect_lock:
+        if _connected:
+            return
+        try:
+            connections.connect(
+                alias="default",
+                host=settings.milvus_host,
+                port=str(settings.milvus_port),
+            )
+        except Exception as exc:
+            raise VectorStoreError(f"连接 Milvus 失败：{exc}") from exc
+        _connected = True
 
 
 def _build_schema(embed_dim: int) -> CollectionSchema:
@@ -197,12 +203,17 @@ def delete_by_doc(collection_name: str, doc_id: str) -> int:
     col = _get_collection(collection_name)
     expr = f'doc_id == "{doc_id}"'
     try:
-        rows = col.query(expr=expr, output_fields=["id"], limit=16384)
+        # 用 query_iterator 突破 pymilvus 默认 16384 上限（P0 M4）
+        iterator = col.query_iterator(expr=expr, output_fields=["id"], batch_size=1000)
+        to_delete = 0
+        batch = next(iterator, None)
+        while batch:
+            to_delete += len(batch)
+            batch = next(iterator, None)
     except Exception as exc:
         raise VectorStoreError(
             f"查询 collection {collection_name} 中 doc_id={doc_id} 失败：{exc}"
         ) from exc
-    to_delete = len(rows)
     if to_delete > 0:
         try:
             col.delete(expr=expr)
@@ -218,19 +229,21 @@ def list_docs(collection_name: str) -> list[dict]:
     """返回 [{doc_id, chunk_count}]，按 doc_id 分组统计。"""
     col = _get_collection(collection_name)
     try:
-        rows = col.query(
-            expr="chunk_id >= 0",
-            output_fields=["doc_id"],
-            limit=16384,
+        # 用 query_iterator 突破 pymilvus 默认 16384 上限（P0 M4）
+        iterator = col.query_iterator(
+            expr="chunk_id >= 0", output_fields=["doc_id"], batch_size=1000
         )
+        counts: dict[str, int] = {}
+        batch = next(iterator, None)
+        while batch:
+            for row in batch:
+                d = row.get("doc_id")
+                counts[d] = counts.get(d, 0) + 1
+            batch = next(iterator, None)
     except Exception as exc:
         raise VectorStoreError(
             f"列举 collection {collection_name} 文档失败：{exc}"
         ) from exc
-    counts: dict[str, int] = {}
-    for row in rows:
-        d = row.get("doc_id")
-        counts[d] = counts.get(d, 0) + 1
     return [{"doc_id": d, "chunk_count": c} for d, c in counts.items()]
 
 

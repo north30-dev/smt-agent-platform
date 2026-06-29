@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     # Java device-service 地址（Python Agent 通过 HTTP 调用）
     device_service_base_url: str = "http://localhost:8081"
 
+    # PostgreSQL（P0-5：文档元数据持久化，从 doc_meta.json 迁移）
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "smt"
+    postgres_user: str = "smt"
+    postgres_password: str = "smt123"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

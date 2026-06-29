@@ -1,10 +1,12 @@
 """shared.llm_client 单元测试。
 
-使用 monkeypatch 替换 shared.llm_client.settings 与 httpx.Client，
+使用 monkeypatch 替换 shared.llm_client.settings 与 httpx.AsyncClient，
 不依赖真实大模型服务。
+
+P0 B1：llm_client.chat/embed 已改 async，测试同步改 async def + AsyncMock。
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -36,22 +38,22 @@ def _patch_settings(monkeypatch, **kwargs) -> MagicMock:
 
 
 def _patch_httpx(monkeypatch, response) -> MagicMock:
-    """替换 httpx.Client 为返回固定响应的假客户端（上下文管理器协议）。"""
+    """替换 httpx.AsyncClient 为返回固定响应的假客户端（async 上下文管理器协议）。"""
     fake_client = MagicMock()
-    fake_client.post.return_value = response
-    fake_client.__enter__.return_value = fake_client
-    fake_client.__exit__.return_value = False
-    monkeypatch.setattr(llm_client.httpx, "Client", lambda *a, **k: fake_client)
+    fake_client.post = AsyncMock(return_value=response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr(llm_client.httpx, "AsyncClient", lambda *a, **k: fake_client)
     return fake_client
 
 
-def test_chat_success(monkeypatch):
+async def test_chat_success(monkeypatch):
     """chat 成功返回 assistant 文本，且请求 URL 正确。"""
     _patch_settings(monkeypatch)
     fake_resp = _FakeResponse(200, {"choices": [{"message": {"content": "hello"}}]})
     fake_client = _patch_httpx(monkeypatch, fake_resp)
 
-    result = chat([{"role": "user", "content": "hi"}])
+    result = await chat([{"role": "user", "content": "hi"}])
 
     assert result == "hello"
     fake_client.post.assert_called_once()
@@ -59,17 +61,17 @@ def test_chat_success(monkeypatch):
     assert posted_url == "https://api.example.com/v1/chat/completions"
 
 
-def test_chat_http_error(monkeypatch):
+async def test_chat_http_error(monkeypatch):
     """HTTP 5xx 应抛 LLMClientError。"""
     _patch_settings(monkeypatch)
     fake_resp = _FakeResponse(500, {"error": "boom"})
     _patch_httpx(monkeypatch, fake_resp)
 
     with pytest.raises(LLMClientError):
-        chat([{"role": "user", "content": "hi"}])
+        await chat([{"role": "user", "content": "hi"}])
 
 
-def test_embed_success(monkeypatch):
+async def test_embed_success(monkeypatch):
     """embed 按 index 排序返回向量，且请求 URL 正确。"""
     _patch_settings(monkeypatch)
     fake_resp = _FakeResponse(
@@ -83,7 +85,7 @@ def test_embed_success(monkeypatch):
     )
     fake_client = _patch_httpx(monkeypatch, fake_resp)
 
-    result = embed(["a", "b"])
+    result = await embed(["a", "b"])
 
     assert result == [[0.3, 0.4], [0.1, 0.2]]
     posted_url = fake_client.post.call_args.args[0]

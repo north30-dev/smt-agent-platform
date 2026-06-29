@@ -2,7 +2,12 @@
 
 使用 TestClient 调用真实路由，通过 monkeypatch 替换 main 模块中
 rag_chain 引用的方法，不触达真实 Milvus 与大模型。
+
+P0 B1：main 路由与 rag_chain 方法均已改 async，TestClient 同步客户端内部自管事件循环，
+测试函数保持 def，但 mock 必须用 AsyncMock 以匹配 await 语义。
 """
+
+from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
@@ -15,7 +20,7 @@ def test_upload_endpoint(monkeypatch):
     """上传接口应返回 200 与 UploadResponse 结构。"""
     monkeypatch.setattr(
         "agent_knowledge.main.rag_chain.upload_document",
-        lambda content, filename: ("doc-1", 5),
+        AsyncMock(return_value=("doc-1", 5)),
     )
 
     response = client.post(
@@ -34,9 +39,11 @@ def test_ask_endpoint(monkeypatch):
     """问答接口应返回 200 与 AskResponse 结构，sources 字段透传。"""
     monkeypatch.setattr(
         "agent_knowledge.main.rag_chain.ask",
-        lambda question, top_k=5: (
-            "答案",
-            [{"doc_id": "d1", "chunk_id": 0, "score": 0.9, "snippet": "片段"}],
+        AsyncMock(
+            return_value=(
+                "答案",
+                [{"doc_id": "d1", "chunk_id": 0, "score": 0.9, "snippet": "片段"}],
+            )
         ),
     )
 
@@ -61,14 +68,16 @@ def test_documents_endpoint(monkeypatch):
     """文档列表接口应返回 200 与 DocumentInfo 列表。"""
     monkeypatch.setattr(
         "agent_knowledge.main.rag_chain.list_documents",
-        lambda: [
-            {
-                "doc_id": "d1",
-                "doc_name": "a.pdf",
-                "chunk_count": 3,
-                "create_time": "2026-06-27T08:30:00Z",
-            }
-        ],
+        AsyncMock(
+            return_value=[
+                {
+                    "doc_id": "d1",
+                    "doc_name": "a.pdf",
+                    "chunk_count": 3,
+                    "create_time": "2026-06-27T08:30:00Z",
+                }
+            ]
+        ),
     )
 
     response = client.get("/knowledge/documents")
@@ -84,7 +93,8 @@ def test_documents_endpoint(monkeypatch):
 def test_delete_endpoint(monkeypatch):
     """删除接口应返回 200 与 DeleteResponse 结构。"""
     monkeypatch.setattr(
-        "agent_knowledge.main.rag_chain.delete_document", lambda doc_id: 3
+        "agent_knowledge.main.rag_chain.delete_document",
+        AsyncMock(return_value=3),
     )
 
     response = client.delete("/knowledge/documents/doc-1")

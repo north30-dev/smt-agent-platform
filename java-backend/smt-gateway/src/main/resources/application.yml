@@ -34,3 +34,12 @@ spring:
             - StripPrefix=2
 
 # 注：logging 段已迁移到 logback-spring.xml（P0-8）
+
+# JWT 鉴权配置（P0-4：网关 reactive WebFilter 校验 /api/agent/** 的 Bearer token）
+# 密钥与 device-service 共用同一 ENV SMT_JWT_SECRET，保证签发/校验一致
+smt:
+  security:
+    jwt:
+      secret: ${SMT_JWT_SECRET:dev-only-please-change-me-in-production-32bytes}
+      header: Authorization
+      prefix: "Bearer "
