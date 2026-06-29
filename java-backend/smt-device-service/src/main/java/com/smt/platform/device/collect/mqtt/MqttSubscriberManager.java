@@ -2,6 +2,7 @@ package com.smt.platform.device.collect.mqtt;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttClient;
@@ -151,6 +152,24 @@ public class MqttSubscriberManager {
         } catch (DateTimeParseException e) {
             log.warn("MQTT timestamp 解析失败，使用当前时间 text={} 原因={}", text, e.getMessage());
             return LocalDateTime.now();
+        }
+    }
+
+    /**
+     * 应用关闭时显式断开 MQTT 连接（M5 收尾，避免连接残留）。
+     *
+     * <p>Spring 容器销毁时由 {@link PreDestroy} 回调触发。
+     * client 未创建或未连接时跳过，不抛异常。</p>
+     */
+    @PreDestroy
+    public void destroy() {
+        if (client != null && client.isConnected()) {
+            try {
+                client.disconnect();
+                log.info("MQTT 客户端已断开 broker={}", broker);
+            } catch (MqttException e) {
+                log.warn("MQTT 客户端断开异常 原因={}", e.getMessage());
+            }
         }
     }
 

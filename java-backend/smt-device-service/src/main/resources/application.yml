@@ -42,6 +42,9 @@ spring:
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
+  # M4 修复：未匹配路径抛 NoHandlerFoundException，由 GlobalExceptionHandler 返回 JSON 404
+  mvc:
+    throw-exception-if-no-handler-found: true
 
 # MyBatis-Plus 配置
 # 注：log-impl 已迁移到 application-dev.yml/application-prod.yml（P0-8 日志 Profile 隔离）

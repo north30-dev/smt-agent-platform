@@ -146,8 +146,8 @@ graph TB
         Etcd[(etcd<br/>2379)]
     end
 
-    subgraph LLM["大模型服务"]
-        LLM[通义千问 / DeepSeek<br/>OpenAI 兼容接口]
+    subgraph LLMSvc["大模型服务"]
+        LLM["通义千问 / DeepSeek<br/>OpenAI 兼容接口"]
     end
 
     Client -->|HTTP /api/agent/knowledge/**| GW
@@ -493,42 +493,42 @@ sequenceDiagram
 
 ```mermaid
 graph BT
-    subgraph Python层["python-agents/"]
-        Shared[shared/<br/>llm_client + vector_store + config + prompts]
-        AK[agent-knowledge<br/>端口 8004]
-        AM[agent-maintenance<br/>端口 8002]
-        Tests[tests/<br/>26 用例]
+    subgraph PythonLayer["python-agents/"]
+        Shared["shared/<br/>llm_client + vector_store + config + prompts"]
+        AK["agent-knowledge<br/>端口 8004"]
+        AM["agent-maintenance<br/>端口 8002"]
+        Tests["tests/<br/>26 用例"]
     end
 
-    subgraph Java层["java-backend/"]
-        GW[smt-gateway<br/>路由转发]
-        DS[smt-device-service<br/>端口 8081]
-        Common[smt-common<br/>公共工具]
+    subgraph JavaLayer["java-backend/"]
+        GW["smt-gateway<br/>路由转发"]
+        DS["smt-device-service<br/>端口 8081"]
+        Common["smt-common<br/>公共工具"]
     end
 
-    subgraph 外部服务["外部服务"]
-        LLM[(大模型 API)]
-        Mil[(Milvus 19530)]
-        PG[(PostgreSQL)]
-        MQTT[(Mosquitto)]
+    subgraph ExtSvc1["外部服务"]
+        LLM[("大模型 API")]
+        Mil[("Milvus 19530")]
+        PG[("PostgreSQL")]
+        MQTT[("Mosquitto")]
     end
 
     AK -->|import| Shared
     AM -->|import| Shared
-    AK -.->|importlib 注册| Tests
-    AM -.->|importlib 注册| Tests
+    AK -.->|"importlib 注册"| Tests
+    AM -.->|"importlib 注册"| Tests
 
-    GW -->|HTTP 路由| AK
-    GW -->|HTTP 路由| AM
-    GW -->|HTTP 路由| DS
+    GW -->|"HTTP 路由"| AK
+    GW -->|"HTTP 路由"| AM
+    GW -->|"HTTP 路由"| DS
 
-    AM -->|httpx 调 REST| DS
+    AM -->|"httpx 调 REST"| DS
 
     DS -->|依赖| Common
-    DS -->|MyBatis-Plus| PG
+    DS -->|"MyBatis-Plus"| PG
     DS -->|Paho| MQTT
 
-    Shared -->|httpx /chat/completions + /embeddings| LLM
+    Shared -->|"httpx /chat/completions + /embeddings"| LLM
     Shared -->|pymilvus| Mil
 ```
 
@@ -606,7 +606,7 @@ graph TB
     end
 
     subgraph Java["Java device-service (HTTP)"]
-        DS[/api/device/{id}<br/>/api/device/{id}/data<br/>/api/device/{id}/datapoints/]
+        DS["/api/device/:id<br/>/api/device/:id/data<br/>/api/device/:id/datapoints/"]
     end
 
     subgraph 外部["外部服务"]
