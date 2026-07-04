@@ -5,6 +5,7 @@
 """
 
 import io
+import re
 from pathlib import Path
 
 import docx
@@ -64,7 +65,13 @@ def _load_docx(content: bytes) -> str:
 
 
 def _split_text(text: str, chunk_size: int, overlap: int) -> list[str]:
-    """按字符切分，相邻段重叠 overlap 字符。"""
+    """按段落/标题边界切分，超长段落回退到句子边界，再回退到字符切分。
+
+    三级降级保证：
+    1. 按双换行（段落）或 markdown 标题（# ~ ######）边界聚合
+    2. 超长段落按句号/换行切分
+    3. 终极 fallback：字符滑动窗口（与原逻辑一致）
+    """
     if not text:
         return []
     if chunk_size <= 0:
@@ -72,14 +79,52 @@ def _split_text(text: str, chunk_size: int, overlap: int) -> list[str]:
     if overlap < 0 or overlap >= chunk_size:
         raise ValueError("overlap 必须满足 0 <= overlap < chunk_size")
 
-    step = chunk_size - overlap
+    if len(text) <= chunk_size:
+        return [text] if text.strip() else []
+
+    parts = re.split(r"(\n#{1,6}\s.*\n|\n\n+)", text)
+    paragraphs: list[str] = []
+    buffer = ""
+    for part in parts:
+        if not part.strip():
+            continue
+        if len(buffer) + len(part) <= chunk_size:
+            buffer += part
+        else:
+            if buffer:
+                paragraphs.append(buffer)
+            if len(part) <= chunk_size:
+                buffer = part
+            else:
+                paragraphs.extend(_split_by_sentence(part, chunk_size, overlap))
+                buffer = ""
+    if buffer:
+        paragraphs.append(buffer)
+    return [p for p in paragraphs if p.strip()]
+
+
+def _split_by_sentence(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """按句号/换行切分超长段落，仍超长则回退到字符滑动窗口。"""
+    sentences = re.split(r"(?<=[。！？.!?\n])\s*", text)
     chunks: list[str] = []
-    i = 0
-    while i < len(text):
-        chunk = text[i : i + chunk_size]
-        if chunk:
-            chunks.append(chunk)
-        if i + chunk_size >= len(text):
-            break
-        i += step
+    buffer = ""
+    for sent in sentences:
+        if len(buffer) + len(sent) <= chunk_size:
+            buffer += sent
+        else:
+            if buffer:
+                chunks.append(buffer)
+            if len(sent) <= chunk_size:
+                buffer = sent
+            else:
+                step = chunk_size - overlap
+                for i in range(0, len(sent), step):
+                    chunk = sent[i : i + chunk_size]
+                    if chunk.strip():
+                        chunks.append(chunk)
+                    if i + chunk_size >= len(sent):
+                        break
+                buffer = ""
+    if buffer:
+        chunks.append(buffer)
     return chunks

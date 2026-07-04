@@ -19,6 +19,8 @@ pymilvus = "^2.4.0"
 pypdf = "^4.0.0"
 python-docx = "^1.1.0"
 asyncpg = "^0.29.0"
+tenacity = "^8.2.0"
+structlog = "^24.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
@@ -37,6 +39,7 @@ asyncio_mode = "auto"
 markers = [
     "integration: end-to-end integration tests (deselect with '-m \"not integration\"')",
     "contract: OpenAPI contract tests via schemathesis (deselect with '-m \"not contract\"')",
+    "slow: slow performance tests (deselect with '-m \"not slow\"')",
 ]
 
 [tool.coverage.run]

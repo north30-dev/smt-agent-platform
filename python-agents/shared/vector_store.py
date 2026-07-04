@@ -11,8 +11,15 @@ from pymilvus import (
     CollectionSchema,
     DataType,
     FieldSchema,
+    MilvusException,
     connections,
     utility,
+)
+from tenacity import (
+    Retrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
 )
 
 from shared.config import settings
@@ -39,11 +46,20 @@ def _ensure_connect() -> None:
         if _connected:
             return
         try:
-            connections.connect(
-                alias="default",
-                host=settings.milvus_host,
-                port=str(settings.milvus_port),
-            )
+            for attempt in Retrying(
+                stop=stop_after_attempt(settings.milvus_max_retries + 1),
+                wait=wait_exponential(
+                    multiplier=settings.milvus_retry_backoff, min=1, max=10
+                ),
+                retry=retry_if_exception_type((MilvusException, OSError)),
+                reraise=True,
+            ):
+                with attempt:
+                    connections.connect(
+                        alias="default",
+                        host=settings.milvus_host,
+                        port=str(settings.milvus_port),
+                    )
         except Exception as exc:
             raise VectorStoreError(f"连接 Milvus 失败：{exc}") from exc
         _connected = True
@@ -132,8 +148,17 @@ def insert(
     doc_ids = [doc_id] * len(chunks)
     chunk_ids = list(range(len(chunks)))
     try:
-        col.insert([ids, doc_ids, chunk_ids, chunks, vectors])
-        col.flush()
+        for attempt in Retrying(
+            stop=stop_after_attempt(settings.milvus_max_retries + 1),
+            wait=wait_exponential(
+                multiplier=settings.milvus_retry_backoff, min=1, max=10
+            ),
+            retry=retry_if_exception_type((MilvusException, OSError)),
+            reraise=True,
+        ):
+            with attempt:
+                col.insert([ids, doc_ids, chunk_ids, chunks, vectors])
+                col.flush()
     except Exception as exc:
         raise VectorStoreError(
             f"插入 collection {collection_name} 失败：{exc}"

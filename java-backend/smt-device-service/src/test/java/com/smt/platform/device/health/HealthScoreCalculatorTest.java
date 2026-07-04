@@ -5,6 +5,7 @@ import com.smt.platform.device.mapper.DeviceMapper;
 import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.model.entity.DeviceData;
 import com.smt.platform.device.service.DeviceService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +18,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,6 +29,9 @@ import static org.mockito.Mockito.when;
  * <p>覆盖：运行态无数据 / 温度超阈值 / 振动超阈值 / 温度+振动叠加 /
  * 维修态 / 停机态 / 非数字 value 忽略 / 同一采集点去重 / 设备不存在 /
  * refreshHealthScore 触发 updateById 等场景。</p>
+ *
+ * <p>m8 改造后，{@link HealthScoreProperties} 通过 {@code @Mock} + {@code @BeforeEach} stub
+ * 12 字段默认值（与原硬编码一致），保证测试断言值不变。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class HealthScoreCalculatorTest {
@@ -40,8 +45,29 @@ class HealthScoreCalculatorTest {
     @Mock
     private DeviceDataMapper deviceDataMapper;
 
+    @Mock
+    private HealthScoreProperties props;
+
     @InjectMocks
     private HealthScoreCalculator calculator;
+
+    @BeforeEach
+    void setUp() {
+        // m8：stub HealthScoreProperties 12 字段默认值（与原硬编码完全一致）
+        // 使用 lenient() 因为不是所有测试都用到所有字段（避免 UnnecessaryStubbingException）
+        lenient().when(props.getScoreMaintenance()).thenReturn(30);
+        lenient().when(props.getScoreStopped()).thenReturn(50);
+        lenient().when(props.getBaseScore()).thenReturn(100);
+        lenient().when(props.getScoreMax()).thenReturn(100);
+        lenient().when(props.getScoreMin()).thenReturn(0);
+        lenient().when(props.getRecentWindowMinutes()).thenReturn(5L);
+        lenient().when(props.getTempThresholdLow()).thenReturn(80.0);
+        lenient().when(props.getTempThresholdHigh()).thenReturn(100.0);
+        lenient().when(props.getVibThresholdLow()).thenReturn(10.0);
+        lenient().when(props.getVibThresholdHigh()).thenReturn(20.0);
+        lenient().when(props.getDeductionHigh()).thenReturn(40);
+        lenient().when(props.getDeductionLow()).thenReturn(20);
+    }
 
     // -------- calculate 评分逻辑 --------
 

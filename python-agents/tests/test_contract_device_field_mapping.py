@@ -35,7 +35,7 @@ def test_health_response_field_names_match_openapi(monkeypatch):
         ),
     )
 
-    response = client.get("/maintenance/health/1001")
+    response = client.get("/v1/maintenance/health/1001")
 
     assert response.status_code == 200
     data = response.json()
@@ -64,7 +64,7 @@ def test_health_camel_to_snake_mapping(monkeypatch):
         ),
     )
 
-    response = client.get("/maintenance/health/2002")
+    response = client.get("/v1/maintenance/health/2002")
 
     assert response.status_code == 200
     data = response.json()

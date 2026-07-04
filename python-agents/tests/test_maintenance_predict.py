@@ -13,7 +13,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent_maintenance.device_client import DeviceServiceUnavailable
-from agent_maintenance.predict import predict
+from agent_maintenance.predict import (
+    _build_alert,
+    _build_recommendation,
+    _get_threshold,
+    _parse_points,
+    _pick_most_urgent,
+    predict,
+)
 
 
 def _make_record(idx: int, code: str, value: float, ts: datetime) -> dict:
@@ -189,3 +196,126 @@ async def test_predict_forecast_hours_to_threshold(monkeypatch):
     assert result["forecast"]["predicted_value"] == 80.0
     # hours_to_threshold = (80-73)/1.0 * 24 = 168，允许浮点误差
     assert abs(result["forecast"]["hours_to_threshold"] - 168.0) < 1.0
+
+
+# ============================================================
+# M9：私有函数分支覆盖测试（以下为新增用例）
+# ============================================================
+
+
+def test_get_threshold_temp_prefix():
+    """TEMP-01 应匹配 TEMP 阈值 {max:80, min:20}。"""
+    cfg = _get_threshold("TEMP-01")
+    assert cfg == {"max": 80.0, "min": 20.0}
+
+
+def test_get_threshold_vib_prefix():
+    """VIB-01 应匹配 VIB 阈值 {max:5, min:0}。"""
+    cfg = _get_threshold("VIB-01")
+    assert cfg == {"max": 5.0, "min": 0.0}
+
+
+def test_get_threshold_underscore_separator():
+    """TEMP_01 下划线分隔符也应正确匹配 TEMP 阈值。"""
+    cfg = _get_threshold("TEMP_01")
+    assert cfg == {"max": 80.0, "min": 20.0}
+
+
+def test_get_threshold_default_fallback():
+    """未知前缀应回退到 DEFAULT 阈值 {max:100, min:0}。"""
+    cfg = _get_threshold("UNKNOWN-XX")
+    assert cfg == {"max": 100.0, "min": 0.0}
+
+
+def test_build_alert_high_severity():
+    """current_mean >= max_v 时应返回 HIGH 严重度。"""
+    cfg = {"max": 80.0, "min": 20.0}
+    alert = _build_alert("TEMP-01", 85.0, cfg)
+    assert alert is not None
+    assert alert["severity"] == "HIGH"
+    assert alert["threshold"] == 80.0
+    assert alert["current_value"] == 85.0
+
+
+def test_build_alert_low_severity():
+    """current_mean >= max_v*0.8 但 < max_v*0.9 时应返回 LOW。"""
+    cfg = {"max": 100.0, "min": 0.0}
+    alert = _build_alert("XX-01", 81.0, cfg)
+    assert alert is not None
+    assert alert["severity"] == "LOW"
+
+
+def test_build_alert_min_boundary():
+    """min_v > 0 且 current_mean <= min_v 时应返回 HIGH（下限告警）。"""
+    cfg = {"max": 80.0, "min": 20.0}
+    alert = _build_alert("TEMP-01", 18.0, cfg)
+    assert alert is not None
+    assert alert["severity"] == "HIGH"
+    assert alert["threshold"] == 20.0
+
+
+def test_build_alert_no_alert():
+    """正常范围内应返回 None（无告警）。"""
+    cfg = {"max": 80.0, "min": 20.0}
+    alert = _build_alert("TEMP-01", 50.0, cfg)
+    assert alert is None
+
+
+def test_build_recommendation_high():
+    """含 HIGH 告警时应返回"建议立即停机检查"。"""
+    alerts = [{"severity": "HIGH"}, {"severity": "LOW"}]
+    assert _build_recommendation(alerts) == "建议立即停机检查"
+
+
+def test_build_recommendation_medium():
+    """仅含 MEDIUM 告警时应返回"建议安排预防性维护"。"""
+    alerts = [{"severity": "MEDIUM"}]
+    assert _build_recommendation(alerts) == "建议安排预防性维护"
+
+
+def test_build_recommendation_none():
+    """无告警时应返回"继续监控"。"""
+    assert _build_recommendation([]) == "继续监控"
+
+
+def test_pick_most_urgent():
+    """多候选取 hours_to_threshold 最小的。"""
+    candidates = [
+        {"datapoint_code": "A", "predicted_value": 80.0, "hours_to_threshold": 48.0},
+        {"datapoint_code": "B", "predicted_value": 100.0, "hours_to_threshold": 12.0},
+        {"datapoint_code": "C", "predicted_value": 5.0, "hours_to_threshold": 168.0},
+    ]
+    result = _pick_most_urgent(candidates)
+    assert result is not None
+    assert result["datapoint_code"] == "B"
+
+
+def test_parse_points_invalid_skip():
+    """无效 timestamp/value 应被跳过。"""
+    records = [
+        {"timestamp": "2026-06-28T00:00:00Z", "value": "70.0"},
+        {"timestamp": None, "value": "71.0"},
+        {"timestamp": "2026-06-28T02:00:00Z", "value": None},
+        {"timestamp": "invalid", "value": "72.0"},
+        {"timestamp": "2026-06-28T04:00:00Z", "value": "not-a-number"},
+        {"timestamp": "2026-06-28T05:00:00Z", "value": "73.0"},
+    ]
+    points = _parse_points(records)
+    assert len(points) == 2
+    assert points[0][1] == 70.0
+    assert points[1][1] == 73.0
+
+
+async def test_predict_empty_datapoints(monkeypatch):
+    """number_points 为空时应返回 _insufficient_result。"""
+    mock_device = MagicMock()
+    mock_device.get_device = AsyncMock(return_value={"id": 1, "deviceName": "贴片机"})
+    mock_device.list_datapoints = AsyncMock(return_value=[])
+    mock_device.get_device_data = AsyncMock(return_value=[])
+    monkeypatch.setattr("agent_maintenance.predict.device_client", mock_device)
+
+    result = await predict(1)
+
+    assert result["data_sufficient"] is False
+    assert result["trend"] == "数据不足"
+    assert result["threshold_alerts"] == []

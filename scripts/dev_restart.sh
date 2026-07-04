@@ -21,7 +21,28 @@ echo "========== [2/4] 重启 C++ 原生层 =========="
 echo "[SKIP] cpp-native 暂未实现，跳过"
 
 echo "========== [3/4] 重启 Java 后端 =========="
-echo "[TODO] 各微服务请通过 mvn -pl <module> spring-boot:run 单独启动"
+# 先停掉旧进程（如有 PID 文件则 kill），沿用 [4/4] Python Agent 段的 PID 管理模式
+for module in smt-device-service smt-gateway; do
+    if [ -f "$LOG_DIR/${module}.pid" ]; then
+        old_pid=$(cat "$LOG_DIR/${module}.pid")
+        if kill -0 "$old_pid" 2>/dev/null; then
+            echo "停止旧 ${module} 进程 (pid=$old_pid)..."
+            kill "$old_pid" || true
+            sleep 1
+        fi
+        rm -f "$LOG_DIR/${module}.pid"
+    fi
+done
+
+cd "$PROJECT_ROOT/java-backend"
+echo "启动 smt-device-service (8081)..."
+mvn -pl smt-device-service spring-boot:run > "$LOG_DIR/smt-device-service.log" 2>&1 &
+echo $! > "$LOG_DIR/smt-device-service.pid"
+
+echo "启动 smt-gateway (8080)..."
+mvn -pl smt-gateway spring-boot:run > "$LOG_DIR/smt-gateway.log" 2>&1 &
+echo $! > "$LOG_DIR/smt-gateway.pid"
+cd "$PROJECT_ROOT"
 
 echo "========== [4/4] 重启 Python 智能体 =========="
 # ===== 启动 Python Agents（Phase 2）=====

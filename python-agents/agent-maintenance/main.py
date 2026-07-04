@@ -1,14 +1,16 @@
 """设备运维 Agent FastAPI 应用。
 
 端口 8002。提供设备健康评估、故障诊断、预测性维护、故障案例录入四个接口。
-对外路径前缀 /maintenance/**（经 smt-gateway StripPrefix=2 后落地本服务）。
+对外路径前缀 /v1/maintenance/**（经 smt-gateway StripPrefix=2 后落地本服务）。
 """
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from shared.config import settings
 from shared.llm_client import LLMClientError
 from shared.models import ErrorResponse
+from shared.observability import get_logger, register_health_endpoint, setup_logging
 from shared.vector_store import VectorStoreError
 
 from . import diagnose, predict
@@ -28,8 +30,12 @@ app = FastAPI(
     version="0.2.0",
 )
 
+setup_logging(settings.log_level)
+logger = get_logger("agent-maintenance")
+register_health_endpoint(app, "agent-maintenance")
 
-@app.get("/maintenance/health/{device_id}", response_model=HealthResponse)
+
+@app.get("/v1/maintenance/health/{device_id}", response_model=HealthResponse)
 async def health(device_id: int):
     """设备健康评估：读取设备健康评分，计算风险等级。"""
     device = await device_client.get_device(device_id)
@@ -62,21 +68,21 @@ async def health(device_id: int):
     )
 
 
-@app.post("/maintenance/diagnose", response_model=DiagnoseResponse)
+@app.post("/v1/maintenance/diagnose", response_model=DiagnoseResponse)
 async def diagnose_fault(req: DiagnoseRequest):
     """故障诊断：基于设备信息与相似案例生成根因假设与维修建议。"""
     result = await diagnose.diagnose(req.device_id, req.symptom)
     return DiagnoseResponse(**result)
 
 
-@app.get("/maintenance/predict/{device_id}", response_model=PredictResponse)
+@app.get("/v1/maintenance/predict/{device_id}", response_model=PredictResponse)
 async def predict_device(device_id: int):
     """预测性维护：基于近 7 天采集数据给出趋势与告警。"""
     result = await predict.predict(device_id)
     return PredictResponse(**result)
 
 
-@app.post("/maintenance/cases", response_model=CaseCreateResponse)
+@app.post("/v1/maintenance/cases", response_model=CaseCreateResponse)
 async def create_case(req: CaseCreateRequest):
     """录入故障案例到向量库，供后续诊断检索。"""
     case_id = await diagnose.create_case(
@@ -91,6 +97,7 @@ async def create_case(req: CaseCreateRequest):
 @app.exception_handler(DeviceServiceUnavailable)
 async def device_service_unavailable_handler(_request, exc: DeviceServiceUnavailable):
     """device-service 不可达 → 503。"""
+    logger.warning("device service unavailable", error=str(exc))
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
@@ -102,6 +109,7 @@ async def device_service_unavailable_handler(_request, exc: DeviceServiceUnavail
 @app.exception_handler(LLMClientError)
 async def llm_error_handler(_request, exc: LLMClientError):
     """大模型不可达 → 503。"""
+    logger.warning("llm unavailable", error=str(exc))
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
@@ -113,6 +121,7 @@ async def llm_error_handler(_request, exc: LLMClientError):
 @app.exception_handler(VectorStoreError)
 async def vector_store_error_handler(_request, exc: VectorStoreError):
     """向量库不可达 → 503。"""
+    logger.warning("vector store unavailable", error=str(exc))
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
@@ -124,6 +133,7 @@ async def vector_store_error_handler(_request, exc: VectorStoreError):
 @app.exception_handler(ValueError)
 async def value_error_handler(_request, exc: ValueError):
     """参数错误 → 400。"""
+    logger.warning("invalid param", error=str(exc))
     return JSONResponse(
         status_code=400,
         content=ErrorResponse(
@@ -135,6 +145,7 @@ async def value_error_handler(_request, exc: ValueError):
 @app.exception_handler(Exception)
 async def internal_error_handler(_request, exc: Exception):
     """未知异常兜底 → 500。"""
+    logger.exception("unhandled exception", error=str(exc))
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(

@@ -32,9 +32,15 @@ def _load_contract():
 
 
 def _normalize_path(path):
-    """归一化路径模板：将 {paramName} 统一为 {}，仅比较结构不比较参数命名。"""
+    """归一化路径模板：将 {paramName} 统一为 {}，仅比较结构不比较参数命名。
+
+    m4：同时去掉 /v1 版本前缀，使 app 路径与契约路径（无版本前缀）对齐。
+    """
     import re
-    return re.sub(r"\{[^}]+\}", "{}", path)
+    path = re.sub(r"\{[^}]+\}", "{}", path)
+    if path.startswith("/v1/"):
+        path = path[3:]
+    return path
 
 
 def _strip_gateway_prefix(paths):
@@ -157,7 +163,7 @@ def test_knowledge_upload_contract(monkeypatch):
     _setup_knowledge_mocks(monkeypatch)
     client = TestClient(knowledge_app)
     resp = client.post(
-        "/knowledge/upload",
+        "/v1/knowledge/upload",
         files={"file": ("test.md", b"# test", "text/markdown")},
     )
     assert resp.status_code == 200
@@ -172,7 +178,7 @@ def test_knowledge_ask_contract(monkeypatch):
     """问答接口响应符合契约：返回 answer/sources。"""
     _setup_knowledge_mocks(monkeypatch)
     client = TestClient(knowledge_app)
-    resp = client.post("/knowledge/ask", json={"question": "钢网清洁频率？"})
+    resp = client.post("/v1/knowledge/ask", json={"question": "钢网清洁频率？"})
     assert resp.status_code == 200
     data = resp.json()
     assert set(data.keys()) == {"answer", "sources"}
@@ -184,7 +190,7 @@ def test_knowledge_documents_contract(monkeypatch):
     """文档列表接口响应符合契约：返回数组，每项含 doc_id/doc_name/chunk_count/create_time。"""
     _setup_knowledge_mocks(monkeypatch)
     client = TestClient(knowledge_app)
-    resp = client.get("/knowledge/documents")
+    resp = client.get("/v1/knowledge/documents")
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
@@ -196,7 +202,7 @@ def test_knowledge_delete_contract(monkeypatch):
     """删除接口响应符合契约：返回 success/deleted_chunks。"""
     _setup_knowledge_mocks(monkeypatch)
     client = TestClient(knowledge_app)
-    resp = client.delete("/knowledge/documents/doc-1")
+    resp = client.delete("/v1/knowledge/documents/doc-1")
     assert resp.status_code == 200
     data = resp.json()
     assert set(data.keys()) == {"success", "deleted_chunks"}
@@ -208,7 +214,7 @@ def test_maintenance_health_contract(monkeypatch):
     """健康评分接口响应符合契约：返回 device_id/health_score/status/risk_level/analysis。"""
     _setup_maintenance_mocks(monkeypatch)
     client = TestClient(maintenance_app)
-    resp = client.get("/maintenance/health/1001")
+    resp = client.get("/v1/maintenance/health/1001")
     assert resp.status_code == 200
     data = resp.json()
     assert set(data.keys()) == {"device_id", "health_score", "status", "risk_level", "analysis"}
@@ -219,7 +225,7 @@ def test_maintenance_diagnose_contract(monkeypatch):
     """诊断接口响应符合契约：返回 root_causes/repair_suggestions/similar_cases。"""
     _setup_maintenance_mocks(monkeypatch)
     client = TestClient(maintenance_app)
-    resp = client.post("/maintenance/diagnose", json={"device_id": 1001, "symptom": "振动偏高"})
+    resp = client.post("/v1/maintenance/diagnose", json={"device_id": 1001, "symptom": "振动偏高"})
     assert resp.status_code == 200
     data = resp.json()
     assert set(data.keys()) == {"root_causes", "repair_suggestions", "similar_cases"}
@@ -232,7 +238,7 @@ def test_maintenance_predict_contract(monkeypatch):
     """预测接口响应符合契约：返回 trend/threshold_alerts/forecast/recommendation/data_sufficient。"""
     _setup_maintenance_mocks(monkeypatch)
     client = TestClient(maintenance_app)
-    resp = client.get("/maintenance/predict/1001")
+    resp = client.get("/v1/maintenance/predict/1001")
     assert resp.status_code == 200
     data = resp.json()
     assert set(data.keys()) == {"trend", "threshold_alerts", "forecast", "recommendation", "data_sufficient"}
@@ -242,7 +248,7 @@ def test_maintenance_cases_contract(monkeypatch):
     """案例创建接口响应符合契约：返回 case_id。"""
     _setup_maintenance_mocks(monkeypatch)
     client = TestClient(maintenance_app)
-    resp = client.post("/maintenance/cases", json={
+    resp = client.post("/v1/maintenance/cases", json={
         "device_type": "MOUNTER",
         "symptom": "振动偏高",
         "root_cause": "轴承磨损",

@@ -6,23 +6,9 @@
 
 from datetime import datetime, timedelta, timezone
 
+from shared.config import settings
+
 from .device_client import DeviceServiceUnavailable, device_client
-
-# 各类采集点的安全阈值（按 datapoint_code 前缀匹配）
-THRESHOLDS = {
-    "TEMP": {"max": 80.0, "min": 20.0},
-    "VIB": {"max": 5.0, "min": 0.0},
-    "DEFAULT": {"max": 100.0, "min": 0.0},
-}
-
-# 数据不足判定阈值（小时）
-_MIN_SPAN_HOURS = 24
-
-# 滑动窗口最大样本数
-_WINDOW_SIZE = 100
-
-# 趋势斜率阈值
-_TREND_THRESHOLD = 0.01
 
 
 async def predict(device_id: int) -> dict:
@@ -76,12 +62,13 @@ async def predict(device_id: int) -> dict:
         # 时间跨度判断
         times = [p[0] for p in points]
         span_hours = (max(times) - min(times)).total_seconds() / 3600.0
-        if span_hours < _MIN_SPAN_HOURS:
+        if span_hours < settings.predict_min_span_hours:
             continue
         has_sufficient = True
 
         # 滑动窗口
-        window = points[-_WINDOW_SIZE:] if len(points) > _WINDOW_SIZE else points
+        window_size = settings.predict_window_size
+        window = points[-window_size:] if len(points) > window_size else points
         values = [p[1] for p in window]
         current_mean = sum(values) / len(values)
 
@@ -160,7 +147,8 @@ def _linear_slope(values: list[float]) -> float:
 def _get_threshold(datapoint_code: str) -> dict:
     """根据 datapoint_code 前缀匹配阈值，无匹配用 DEFAULT。"""
     prefix = datapoint_code.split("-")[0].split("_")[0].upper()
-    return THRESHOLDS.get(prefix, THRESHOLDS["DEFAULT"])
+    thresholds = settings.predict_thresholds
+    return thresholds.get(prefix, thresholds["DEFAULT"])
 
 
 def _build_alert(code: str, current_mean: float, cfg: dict) -> dict | None:
@@ -239,9 +227,10 @@ def _aggregate_trend(slopes: list[float]) -> str:
     if not slopes:
         return "平稳"
     avg = sum(slopes) / len(slopes)
-    if avg > _TREND_THRESHOLD:
+    trend_threshold = settings.predict_trend_threshold
+    if avg > trend_threshold:
         return "上升"
-    if avg < -_TREND_THRESHOLD:
+    if avg < -trend_threshold:
         return "下降"
     return "平稳"
 

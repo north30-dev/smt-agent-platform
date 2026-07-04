@@ -32,7 +32,7 @@ def test_health_endpoint(monkeypatch):
         ),
     )
 
-    response = client.get("/maintenance/health/1")
+    response = client.get("/v1/maintenance/health/1")
 
     assert response.status_code == 200
     data = response.json()
@@ -49,7 +49,7 @@ def test_health_device_unavailable(monkeypatch):
         AsyncMock(side_effect=DeviceServiceUnavailable("connection refused")),
     )
 
-    response = client.get("/maintenance/health/1")
+    response = client.get("/v1/maintenance/health/1")
 
     assert response.status_code == 503
     data = response.json()
@@ -71,7 +71,7 @@ def test_diagnose_endpoint(monkeypatch):
     )
 
     response = client.post(
-        "/maintenance/diagnose", json={"device_id": 1, "symptom": "异响"}
+        "/v1/maintenance/diagnose", json={"device_id": 1, "symptom": "异响"}
     )
 
     assert response.status_code == 200
@@ -96,7 +96,7 @@ def test_predict_endpoint(monkeypatch):
         ),
     )
 
-    response = client.get("/maintenance/predict/1")
+    response = client.get("/v1/maintenance/predict/1")
 
     assert response.status_code == 200
     data = response.json()
@@ -115,7 +115,7 @@ def test_cases_endpoint(monkeypatch):
     )
 
     response = client.post(
-        "/maintenance/cases",
+        "/v1/maintenance/cases",
         json={
             "device_type": "MOUNTER",
             "symptom": "x",
@@ -148,7 +148,7 @@ def test_health_score_100_returns_low(monkeypatch):
     """healthScore=100 应映射为 risk_level=LOW。补齐 phase2 B-6 盲区。"""
     _patch_health(monkeypatch, 100)
 
-    response = client.get("/maintenance/health/1")
+    response = client.get("/v1/maintenance/health/1")
 
     assert response.status_code == 200
     assert response.json()["risk_level"] == "LOW"
@@ -158,7 +158,7 @@ def test_health_score_60_returns_medium(monkeypatch):
     """healthScore=60 应映射为 risk_level=MEDIUM（边界值）。"""
     _patch_health(monkeypatch, 60)
 
-    response = client.get("/maintenance/health/1")
+    response = client.get("/v1/maintenance/health/1")
 
     assert response.status_code == 200
     assert response.json()["risk_level"] == "MEDIUM"
@@ -168,7 +168,7 @@ def test_health_score_30_returns_high(monkeypatch):
     """healthScore=30 应映射为 risk_level=HIGH。"""
     _patch_health(monkeypatch, 30)
 
-    response = client.get("/maintenance/health/1")
+    response = client.get("/v1/maintenance/health/1")
 
     assert response.status_code == 200
     assert response.json()["risk_level"] == "HIGH"
@@ -191,7 +191,7 @@ def test_health_score_missing_returns_503(monkeypatch):
         ),
     )
 
-    response = client.get("/maintenance/health/1")
+    response = client.get("/v1/maintenance/health/1")
 
     assert response.status_code == 503
     data = response.json()
@@ -204,7 +204,7 @@ def test_diagnose_empty_symptom_returns_422():
     DiagnoseRequest.symptom 有 min_length=1 约束。
     """
     response = client.post(
-        "/maintenance/diagnose", json={"device_id": 1, "symptom": ""}
+        "/v1/maintenance/diagnose", json={"device_id": 1, "symptom": ""}
     )
 
     assert response.status_code == 422
@@ -221,7 +221,7 @@ def test_diagnose_llm_error_returns_503(monkeypatch):
     )
 
     response = client.post(
-        "/maintenance/diagnose", json={"device_id": 1, "symptom": "异响"}
+        "/v1/maintenance/diagnose", json={"device_id": 1, "symptom": "异响"}
     )
 
     assert response.status_code == 503

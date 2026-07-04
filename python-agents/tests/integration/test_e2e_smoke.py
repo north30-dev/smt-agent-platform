@@ -97,7 +97,7 @@ def test_maintenance_health_e2e():
 
     # 2. 通过 maintenance agent 查询健康评分
     health_resp = httpx.get(
-        f"{MAINTENANCE_BASE}/maintenance/health/{device_id}",
+        f"{MAINTENANCE_BASE}/v1/maintenance/health/{device_id}",
         timeout=10.0,
     )
     assert health_resp.status_code == 200, f"health 查询失败: {health_resp.text}"

@@ -26,7 +26,7 @@ def test_upload_endpoint(monkeypatch):
     )
 
     response = client.post(
-        "/knowledge/upload",
+        "/v1/knowledge/upload",
         files={"file": ("manual.txt", b"hello world", "text/plain")},
     )
 
@@ -49,7 +49,7 @@ def test_ask_endpoint(monkeypatch):
         ),
     )
 
-    response = client.post("/knowledge/ask", json={"question": "钢网清洁频率？"})
+    response = client.post("/v1/knowledge/ask", json={"question": "钢网清洁频率？"})
 
     assert response.status_code == 200
     data = response.json()
@@ -61,7 +61,7 @@ def test_ask_endpoint(monkeypatch):
 
 def test_ask_invalid():
     """空 body 应触发 Pydantic 校验失败 → 422。"""
-    response = client.post("/knowledge/ask", json={})
+    response = client.post("/v1/knowledge/ask", json={})
 
     assert response.status_code == 422
 
@@ -82,7 +82,7 @@ def test_documents_endpoint(monkeypatch):
         ),
     )
 
-    response = client.get("/knowledge/documents")
+    response = client.get("/v1/knowledge/documents")
 
     assert response.status_code == 200
     data = response.json()
@@ -99,7 +99,7 @@ def test_delete_endpoint(monkeypatch):
         AsyncMock(return_value=3),
     )
 
-    response = client.delete("/knowledge/documents/doc-1")
+    response = client.delete("/v1/knowledge/documents/doc-1")
 
     assert response.status_code == 200
     data = response.json()
@@ -117,7 +117,7 @@ def test_ask_llm_unavailable_returns_503(monkeypatch):
         AsyncMock(side_effect=LLMClientError("LLM timeout")),
     )
 
-    response = client.post("/knowledge/ask", json={"question": "钢网清洁？"})
+    response = client.post("/v1/knowledge/ask", json={"question": "钢网清洁？"})
 
     assert response.status_code == 503
     data = response.json()
@@ -132,7 +132,7 @@ def test_ask_vector_store_error_returns_503(monkeypatch):
         AsyncMock(side_effect=VectorStoreError("Milvus down")),
     )
 
-    response = client.post("/knowledge/ask", json={"question": "钢网清洁？"})
+    response = client.post("/v1/knowledge/ask", json={"question": "钢网清洁？"})
 
     assert response.status_code == 503
     data = response.json()
@@ -146,7 +146,7 @@ def test_upload_empty_file_returns_400():
     不需要 mock：main.py upload 接口直接检查 content 为空。
     """
     response = client.post(
-        "/knowledge/upload",
+        "/v1/knowledge/upload",
         files={"file": ("empty.txt", b"", "text/plain")},
     )
 

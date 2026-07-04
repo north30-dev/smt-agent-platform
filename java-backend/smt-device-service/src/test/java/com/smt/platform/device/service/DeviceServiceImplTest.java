@@ -54,8 +54,9 @@ class DeviceServiceImplTest {
         assertThat(created.getDeviceCode()).isEqualTo("PRINTER-001");
         assertThat(created.getStatus()).isEqualTo("RUNNING");
         assertThat(created.getHealthScore()).isEqualTo(100);
-        assertThat(created.getDeleted()).isEqualTo(0);
-        assertThat(created.getCreateTime()).isNotNull();
+        // M5：deleted/createTime 由 MetaObjectHandler 在 insert 时自动填充，
+        // 单测环境（mocked mapper）不触发 MetaObjectHandler，故不断言这两个字段；
+        // 其填充行为由集成测试（含真实 DB + MetaObjectHandler）覆盖。
         verify(deviceMapper).insert(any(Device.class));
     }
 
@@ -133,7 +134,8 @@ class DeviceServiceImplTest {
         assertThat(updated.getDeviceCode()).isEqualTo("PRINTER-001");
         assertThat(updated.getDeviceType()).isEqualTo("PRINTER");
         assertThat(updated.getHealthScore()).isEqualTo(100);
-        assertThat(updated.getUpdateTime()).isNotNull();
+        // M5：updateTime 由 MetaObjectHandler 在 updateById 时自动填充，
+        // 单测环境（mocked mapper）不触发 MetaObjectHandler，故不断言该字段。
         verify(deviceMapper).updateById(any(Device.class));
     }
 

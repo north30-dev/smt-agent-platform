@@ -1,14 +1,16 @@
 """知识助手 Agent FastAPI 应用。
 
 端口 8004。提供文档上传、RAG 问答、文档列表、文档删除四个接口。
-对外路径前缀 /knowledge/**（经 smt-gateway StripPrefix=2 后落地本服务）。
+对外路径前缀 /v1/knowledge/**（经 smt-gateway StripPrefix=2 后落地本服务）。
 """
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 
+from shared.config import settings
 from shared.llm_client import LLMClientError
 from shared.models import ErrorResponse
+from shared.observability import get_logger, register_health_endpoint, setup_logging
 from shared.vector_store import VectorStoreError
 
 from . import rag_chain
@@ -27,8 +29,12 @@ app = FastAPI(
     version="0.2.0",
 )
 
+setup_logging(settings.log_level)
+logger = get_logger("agent-knowledge")
+register_health_endpoint(app, "agent-knowledge")
 
-@app.post("/knowledge/upload", response_model=UploadResponse)
+
+@app.post("/v1/knowledge/upload", response_model=UploadResponse)
 async def upload(file: UploadFile = File(...)):
     """上传知识文档，解析切分向量化后写入 Milvus。"""
     content = await file.read()
@@ -44,7 +50,7 @@ async def upload(file: UploadFile = File(...)):
     return UploadResponse(doc_id=doc_id, doc_name=filename, chunk_count=chunk_count)
 
 
-@app.post("/knowledge/ask", response_model=AskResponse)
+@app.post("/v1/knowledge/ask", response_model=AskResponse)
 async def ask(req: AskRequest):
     """基于知识库的 RAG 检索增强问答。"""
     answer, sources = await rag_chain.ask(req.question)
@@ -60,13 +66,13 @@ async def ask(req: AskRequest):
     return AskResponse(answer=answer, sources=source_items)
 
 
-@app.get("/knowledge/documents", response_model=list[DocumentInfo])
+@app.get("/v1/knowledge/documents", response_model=list[DocumentInfo])
 async def list_documents():
     """查询知识库全部文档元信息。"""
     return [DocumentInfo(**doc) for doc in await rag_chain.list_documents()]
 
 
-@app.delete("/knowledge/documents/{doc_id}", response_model=DeleteResponse)
+@app.delete("/v1/knowledge/documents/{doc_id}", response_model=DeleteResponse)
 async def delete_document(doc_id: str):
     """根据 doc_id 删除文档及其全部分块向量。"""
     deleted = await rag_chain.delete_document(doc_id)
@@ -76,6 +82,7 @@ async def delete_document(doc_id: str):
 @app.exception_handler(ValueError)
 async def value_error_handler(_request, exc: ValueError):
     """不支持的文件类型等参数错误 → 400。"""
+    logger.warning("value error", error=str(exc))
     return JSONResponse(
         status_code=400,
         content=ErrorResponse(
@@ -87,6 +94,7 @@ async def value_error_handler(_request, exc: ValueError):
 @app.exception_handler(LLMClientError)
 async def llm_error_handler(_request, exc: LLMClientError):
     """大模型不可达 → 503。"""
+    logger.warning("llm unavailable", error=str(exc))
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
@@ -98,6 +106,7 @@ async def llm_error_handler(_request, exc: LLMClientError):
 @app.exception_handler(VectorStoreError)
 async def vector_store_error_handler(_request, exc: VectorStoreError):
     """向量库不可达 → 503。"""
+    logger.warning("vector store unavailable", error=str(exc))
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
@@ -109,6 +118,7 @@ async def vector_store_error_handler(_request, exc: VectorStoreError):
 @app.exception_handler(Exception)
 async def internal_error_handler(_request, exc: Exception):
     """未知异常兜底 → 500。"""
+    logger.exception("unhandled exception", error=str(exc))
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(

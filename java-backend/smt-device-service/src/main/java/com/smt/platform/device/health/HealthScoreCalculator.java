@@ -1,7 +1,6 @@
 package com.smt.platform.device.health;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.smt.platform.common.exception.BizException;
 import com.smt.platform.device.mapper.DeviceDataMapper;
 import com.smt.platform.device.mapper.DeviceMapper;
 import com.smt.platform.device.model.entity.Device;
@@ -9,6 +8,7 @@ import com.smt.platform.device.model.entity.DeviceData;
 import com.smt.platform.device.service.DeviceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -22,9 +22,16 @@ import java.util.Map;
  * <p>基于设备状态与最近 5 分钟实时数据按规则计算评分（0-100），
  * 并更新到 device.health_score 字段。</p>
  *
+ * <p>m8 改造：11 个硬编码常量与魔法数字抽取到 {@link HealthScoreProperties}，
+ * 默认值与原硬编码完全一致，可通过 {@code smt.health.score.*} 配置覆盖。
+ * 默认配置下评分结果与原硬编码 100% 等价。</p>
+ *
+ * <p>Batch 4 改造：{@link #refreshHealthScore} 加 {@link Async} 注解，
+ * 异步执行评分重算避免阻塞 MQTT 回调；CallerRunsPolicy 保证队列满时退化为同步执行。</p>
+ *
  * <ul>
- *   <li>状态 MAINTENANCE：固定 30 分</li>
- *   <li>状态 STOPPED：固定 50 分</li>
+ *   <li>状态 MAINTENANCE：固定 30 分（默认，可配置）</li>
+ *   <li>状态 STOPPED：固定 50 分（默认，可配置）</li>
  *   <li>状态 RUNNING：基础 100 分，按最近 5 分钟数据扣分
  *     <ul>
  *       <li>采集点 code 含 "temp"/"temperature"：value &gt; 80 扣 20，&gt; 100 扣 40</li>
@@ -40,38 +47,19 @@ public class HealthScoreCalculator {
 
     private static final Logger log = LoggerFactory.getLogger(HealthScoreCalculator.class);
 
-    /** 维修态固定评分 */
-    private static final int SCORE_MAINTENANCE = 30;
-    /** 停机态固定评分 */
-    private static final int SCORE_STOPPED = 50;
-    /** 运行态基础评分 */
-    private static final int BASE_SCORE = 100;
-    /** 评分上限 */
-    private static final int SCORE_MAX = 100;
-    /** 评分下限 */
-    private static final int SCORE_MIN = 0;
-    /** 最近数据时间窗（分钟） */
-    private static final long RECENT_WINDOW_MINUTES = 5L;
-
-    /** 温度一级阈值（>80 扣 20） */
-    private static final double TEMP_THRESHOLD_LOW = 80.0;
-    /** 温度二级阈值（>100 扣 40） */
-    private static final double TEMP_THRESHOLD_HIGH = 100.0;
-    /** 振动一级阈值（>10 扣 20） */
-    private static final double VIB_THRESHOLD_LOW = 10.0;
-    /** 振动二级阈值（>20 扣 40） */
-    private static final double VIB_THRESHOLD_HIGH = 20.0;
-
     private final DeviceService deviceService;
     private final DeviceMapper deviceMapper;
     private final DeviceDataMapper deviceDataMapper;
+    private final HealthScoreProperties props;
 
     public HealthScoreCalculator(DeviceService deviceService,
                                  DeviceMapper deviceMapper,
-                                 DeviceDataMapper deviceDataMapper) {
+                                 DeviceDataMapper deviceDataMapper,
+                                 HealthScoreProperties props) {
         this.deviceService = deviceService;
         this.deviceMapper = deviceMapper;
         this.deviceDataMapper = deviceDataMapper;
+        this.props = props;
     }
 
     /**
@@ -81,21 +69,16 @@ public class HealthScoreCalculator {
      *
      * @param deviceId 设备 ID
      */
+    @Async("healthScoreExecutor")
     public void refreshHealthScore(Long deviceId) {
-        Device device;
-        try {
-            device = deviceService.getById(deviceId);
-        } catch (BizException e) {
-            // DeviceService.getById 在设备不存在时抛 BizException，视为设备不存在
-            log.warn("健康评分计算跳过：设备不存在 deviceId={}", deviceId);
-            return;
-        }
+        // P0-1 后 getById 走 MyBatis-Plus 默认实现，设备不存在时返回 null（不抛 BizException）
+        Device device = deviceService.getById(deviceId);
         if (device == null) {
             log.warn("健康评分计算跳过：设备不存在 deviceId={}", deviceId);
             return;
         }
 
-        LocalDateTime since = LocalDateTime.now().minusMinutes(RECENT_WINDOW_MINUTES);
+        LocalDateTime since = LocalDateTime.now().minusMinutes(props.getRecentWindowMinutes());
         List<DeviceData> recentData = deviceDataMapper.selectList(new LambdaQueryWrapper<DeviceData>()
                 .eq(DeviceData::getDeviceId, deviceId)
                 .ge(DeviceData::getTimestamp, since));
@@ -119,14 +102,14 @@ public class HealthScoreCalculator {
      */
     public int calculate(Device device, List<DeviceData> recentData) {
         if (device == null) {
-            return SCORE_MIN;
+            return props.getScoreMin();
         }
         String status = device.getStatus();
         if ("MAINTENANCE".equals(status)) {
-            return SCORE_MAINTENANCE;
+            return props.getScoreMaintenance();
         }
         if ("STOPPED".equals(status)) {
-            return SCORE_STOPPED;
+            return props.getScoreStopped();
         }
         // RUNNING 及其它未知状态均按 RUNNING 规则处理（基础 100 扣分）
 
@@ -147,7 +130,7 @@ public class HealthScoreCalculator {
             }
         }
 
-        int score = BASE_SCORE;
+        int score = props.getBaseScore();
         for (DeviceData d : latestByCode.values()) {
             String code = d.getDatapointCode().toLowerCase();
             Double n = tryParseDouble(d.getValue());
@@ -155,21 +138,21 @@ public class HealthScoreCalculator {
                 continue;
             }
             if (code.contains("temp") || code.contains("temperature")) {
-                if (n > TEMP_THRESHOLD_HIGH) {
-                    score -= 40;
-                } else if (n > TEMP_THRESHOLD_LOW) {
-                    score -= 20;
+                if (n > props.getTempThresholdHigh()) {
+                    score -= props.getDeductionHigh();
+                } else if (n > props.getTempThresholdLow()) {
+                    score -= props.getDeductionLow();
                 }
             } else if (code.contains("vibration") || code.contains("vib")) {
-                if (n > VIB_THRESHOLD_HIGH) {
-                    score -= 40;
-                } else if (n > VIB_THRESHOLD_LOW) {
-                    score -= 20;
+                if (n > props.getVibThresholdHigh()) {
+                    score -= props.getDeductionHigh();
+                } else if (n > props.getVibThresholdLow()) {
+                    score -= props.getDeductionLow();
                 }
             }
         }
 
-        return Math.max(SCORE_MIN, Math.min(SCORE_MAX, score));
+        return Math.max(props.getScoreMin(), Math.min(props.getScoreMax(), score));
     }
 
     /**

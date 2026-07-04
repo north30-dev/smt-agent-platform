@@ -11,13 +11,18 @@ import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.service.DeviceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.beans.PropertyDescriptor;
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Set;
 
 /**
  * 设备台账服务实现。
@@ -28,12 +33,26 @@ import java.time.LocalDateTime;
  * <p>P0-2 修复：类级 {@link Transactional} 为所有写操作加事务边界；
  * {@link #create} 捕获 {@link DuplicateKeyException} 转 {@link BizException}，
  * 依赖 DB 唯一索引 {@code uk_device_code} 兜底并发写入。</p>
+ *
+ * <p>M5 改造：createTime/updateTime/deleted 由 {@link com.smt.platform.common.config.MyMetaObjectHandler}
+ * 自动填充，不再手写时间戳。</p>
+ *
+ * <p>M2 改造：{@link #update} 方法 8 字段判空拷贝改为 {@link BeanUtils#copyProperties} + null 属性过滤，
+ * 保护 id/deviceCode/createTime/deleted 不被覆盖，行为与原判空逻辑等价。</p>
  */
 @Service
 @Transactional
 public class DeviceServiceImpl extends ServiceImpl<DeviceMapper, Device> implements DeviceService {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceServiceImpl.class);
+
+    /**
+     * update 时受保护字段：不允许通过 update 修改。
+     * id 主键、deviceCode 业务唯一键、createTime/deleted 由 DB/MetaObjectHandler 管理。
+     * updateTime 不在保护列表中（由 MetaObjectHandler 在 updateById 时自动填充）。
+     */
+    private static final Set<String> PROTECTED_FIELDS =
+            Set.of("id", "deviceCode", "createTime", "deleted", "createBy", "updateBy", "updateTime", "class");
 
     @Override
     public Device create(Device device) {
@@ -43,18 +62,14 @@ public class DeviceServiceImpl extends ServiceImpl<DeviceMapper, Device> impleme
         if (count != null && count > 0) {
             throw new BizException(ResultCode.PARAM_ERROR, "设备编码已存在: " + device.getDeviceCode());
         }
-        LocalDateTime now = LocalDateTime.now();
+        // 业务默认值（非审计字段，保留手写）
         if (device.getStatus() == null) {
             device.setStatus("RUNNING");
         }
         if (device.getHealthScore() == null) {
             device.setHealthScore(100);
         }
-        if (device.getDeleted() == null) {
-            device.setDeleted(0);
-        }
-        device.setCreateTime(now);
-        device.setUpdateTime(now);
+        // createTime/updateTime/deleted 由 MetaObjectHandler.insertFill 自动填充（M5）
         try {
             baseMapper.insert(device);
         } catch (DuplicateKeyException e) {
@@ -71,32 +86,10 @@ public class DeviceServiceImpl extends ServiceImpl<DeviceMapper, Device> impleme
         if (existing == null) {
             throw new BizException(ResultCode.NOT_FOUND, "设备不存在");
         }
-        // 部分字段更新，deviceCode 不允许修改
-        if (device.getDeviceName() != null) {
-            existing.setDeviceName(device.getDeviceName());
-        }
-        if (device.getDeviceType() != null) {
-            existing.setDeviceType(device.getDeviceType());
-        }
-        if (device.getProductionLine() != null) {
-            existing.setProductionLine(device.getProductionLine());
-        }
-        if (device.getIpAddress() != null) {
-            existing.setIpAddress(device.getIpAddress());
-        }
-        if (device.getProtocolType() != null) {
-            existing.setProtocolType(device.getProtocolType());
-        }
-        if (device.getOpcUaEndpoint() != null) {
-            existing.setOpcUaEndpoint(device.getOpcUaEndpoint());
-        }
-        if (device.getStatus() != null) {
-            existing.setStatus(device.getStatus());
-        }
-        if (device.getHealthScore() != null) {
-            existing.setHealthScore(device.getHealthScore());
-        }
-        existing.setUpdateTime(LocalDateTime.now());
+        // M2：仅复制 device 中非 null 且非受保护字段到 existing，等价于原 8 字段判空拷贝
+        BeanUtils.copyProperties(device, existing, getCopyIgnorePropertyNames(device));
+        existing.setId(id);
+        // updateTime 由 MetaObjectHandler.updateFill 在 updateById 时自动填充（M5）
         baseMapper.updateById(existing);
         return existing;
     }
@@ -130,5 +123,17 @@ public class DeviceServiceImpl extends ServiceImpl<DeviceMapper, Device> impleme
                 .eq(StringUtils.hasText(status), Device::getStatus, status)
                 .orderByDesc(Device::getCreateTime);
         return baseMapper.selectPage(pageParam, wrapper);
+    }
+
+    /**
+     * 返回应被忽略的属性名数组：source 中值为 null 的属性 + 受保护字段。
+     * 用于 {@link BeanUtils#copyProperties} 的第三参数，实现"仅复制非 null 且非受保护字段"。
+     */
+    private static String[] getCopyIgnorePropertyNames(Object source) {
+        BeanWrapper wrapper = new BeanWrapperImpl(source);
+        return Arrays.stream(wrapper.getPropertyDescriptors())
+                .map(PropertyDescriptor::getName)
+                .filter(name -> wrapper.getPropertyValue(name) == null || PROTECTED_FIELDS.contains(name))
+                .toArray(String[]::new);
     }
 }
