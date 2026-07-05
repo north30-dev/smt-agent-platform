@@ -61,11 +61,11 @@ done
 
 echo "启动 agent-knowledge (8004)..."
 cd "$PROJECT_ROOT/python-agents"
-poetry run uvicorn agent-knowledge.main:app --port 8004 --host 0.0.0.0 > "$LOG_DIR/agent-knowledge.log" 2>&1 &
+uv run uvicorn agent-knowledge.main:app --port 8004 --host 0.0.0.0 > "$LOG_DIR/agent-knowledge.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-knowledge.pid"
 
 echo "启动 agent-maintenance (8002)..."
-poetry run uvicorn agent-maintenance.main:app --port 8002 --host 0.0.0.0 > "$LOG_DIR/agent-maintenance.log" 2>&1 &
+uv run uvicorn agent-maintenance.main:app --port 8002 --host 0.0.0.0 > "$LOG_DIR/agent-maintenance.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-maintenance.pid"
 cd "$PROJECT_ROOT"
 

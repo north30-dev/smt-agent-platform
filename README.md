@@ -78,10 +78,10 @@ mvn test                                    # 全量测试
 
 ```bash
 cd python-agents
-poetry install
-poetry run pytest                                                   # 全部测试
-poetry run uvicorn agent-knowledge.main:app --port 8004 --reload   # 知识助手
-poetry run uvicorn agent-maintenance.main:app --port 8002 --reload # 运维 Agent
+uv sync
+uv run pytest                                                   # 全部测试
+uv run uvicorn agent-knowledge.main:app --port 8004 --reload   # 知识助手
+uv run uvicorn agent-maintenance.main:app --port 8002 --reload # 运维 Agent
 ```
 
 ### 4. 前端

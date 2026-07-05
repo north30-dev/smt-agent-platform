@@ -40,7 +40,7 @@ cp python-agents/.env.example python-agents/.env
 
 ```bash
 cd python-agents
-poetry install
+uv sync
 ```
 
 ### 2. 启动中间件
@@ -54,24 +54,24 @@ docker-compose up -d    # 启动 Milvus + etcd + minio 等
 
 ```bash
 # 知识助手 Agent（端口 8004）
-poetry run uvicorn agent-knowledge.main:app --port 8004 --reload
+uv run uvicorn agent-knowledge.main:app --port 8004 --reload
 
 # 设备运维 Agent（端口 8002）
-poetry run uvicorn agent-maintenance.main:app --port 8002 --reload
+uv run uvicorn agent-maintenance.main:app --port 8002 --reload
 ```
 
 ### 4. 运行测试
 
 ```bash
-poetry run pytest                    # 全部测试
-poetry run pytest tests/test_llm_client.py  # 单文件测试
+uv run pytest                    # 全部测试
+uv run pytest tests/test_llm_client.py  # 单文件测试
 ```
 
 ## 目录结构
 
 ```
 python-agents/
-├── pyproject.toml                  # Poetry 依赖配置
+├── pyproject.toml                  # uv 依赖配置（PEP 621）
 ├── .env.example                    # 环境变量模板
 ├── README.md                       # 本文件
 ├── shared/                         # 公共模块

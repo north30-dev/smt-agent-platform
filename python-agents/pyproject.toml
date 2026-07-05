@@ -1,36 +1,36 @@
-[tool.poetry]
+[project]
 name = "smt-python-agents"
 version = "0.2.0"
 description = "SMT 贴片产线智能运维平台 - Python 智能体层（Phase 2：知识助手 Agent + 设备运维 Agent）"
-authors = ["north30-dev <north30dev@163.com>"]
+authors = [{name = "north30-dev", email = "north30dev@163.com"}]
 readme = "README.md"
-package-mode = false
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "httpx>=0.27.0",
+    "python-multipart>=0.0.9",
+    "pyyaml>=6.0.1",
+    "pymilvus>=2.4.0",
+    "pypdf>=4.0.0",
+    "python-docx>=1.1.0",
+    "asyncpg>=0.29.0",
+    "tenacity>=8.2.0",
+    "structlog>=24.1.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-fastapi = "^0.110.0"
-uvicorn = {extras = ["standard"], version = "^0.29.0"}
-pydantic = "^2.6.0"
-pydantic-settings = "^2.2.0"
-httpx = "^0.27.0"
-python-multipart = "^0.0.9"
-pyyaml = "^6.0.1"
-pymilvus = "^2.4.0"
-pypdf = "^4.0.0"
-python-docx = "^1.1.0"
-asyncpg = "^0.29.0"
-tenacity = "^8.2.0"
-structlog = "^24.1.0"
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "schemathesis>=3.36.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-pytest-asyncio = "^0.23.0"
-pytest-cov = "^4.1.0"
-schemathesis = "^3.36.0"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv]
+no-build = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

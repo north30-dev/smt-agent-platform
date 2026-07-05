@@ -15,7 +15,7 @@
 | 层          | 技术                                               | 版本                |
 | ---------- | ------------------------------------------------ | ----------------- |
 | Java 后端    | Spring Boot / Spring Cloud + Maven 多模块           | Java 21           |
-| Python 智能体 | LangChain / LangGraph + FastAPI + Poetry         | Python 3.12       |
+| Python 智能体 | LangChain / LangGraph + FastAPI + uv             | Python 3.12       |
 | C++ 原生层    | CMake + pybind11 + JNI（仅输出动态库）                   | C++17             |
 | 前端         | React + TypeScript + Vite + Ant Design + ECharts | React 18 / Vite 5 |
 | 中间件        | Kafka、Redis、PostgreSQL、InfluxDB、Milvus           | docker-compose 编排 |
@@ -60,10 +60,10 @@ mvn -pl smt-common test              # 单模块测试
 
 ```bash
 cd python-agents
-poetry install
-poetry run pytest                    # 全部测试
-poetry run pytest tests/test_llm_client.py  # 单文件测试
-poetry run uvicorn agent-maintenance.main:app --port 8002 --reload  # 运行单个 Agent
+uv sync
+uv run pytest                    # 全部测试
+uv run pytest tests/test_llm_client.py  # 单文件测试
+uv run uvicorn agent-maintenance.main:app --port 8002 --reload  # 运行单个 Agent
 ```
 
 ### 2.5 前端
