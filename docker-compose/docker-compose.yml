@@ -3,6 +3,13 @@
 # 停止: cd docker-compose && docker-compose down
 #
 # 包含: PostgreSQL(5432) / Redis(6379) / Zookeeper(2181) / Kafka(9092) / Mosquitto(1883)
+#       Milvus(19530) + etcd(2379) + minio(9000)（Phase 2 新增，供 Python Agent RAG 使用）
+#       InfluxDB(8086)（Batch 4 新增，device_data 时序双写）
+#
+# 网络隔离（M6）：
+#   intranet — 内部数据网络（PG/Redis/Kafka/Zookeeper/Milvus/Etcd/MinIO/InfluxDB）
+#   edge     — 边缘接入网络（Mosquitto，供设备/Mock 接入）
+#   app      — 应用网络（保留给未来微服务接入）
 #
 # 凭据环境变量化（P0-5）：
 #   本文件所有 ${VAR} 引用 docker-compose/.env
@@ -31,6 +38,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - intranet
 
   # ===== 缓存：Redis =====
   redis:
@@ -47,6 +56,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - intranet
 
   # ===== Kafka 依赖：Zookeeper =====
   zookeeper:
@@ -63,6 +74,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - intranet
 
   # ===== 消息队列：Kafka =====
   kafka:
@@ -89,10 +102,13 @@ services:
       interval: 15s
       timeout: 10s
       retries: 6
+    networks:
+      - intranet
 
   # ===== MQTT Broker：Eclipse Mosquitto =====
   # 用于 Mock 设备 -> MQTT -> device-service 接收闭环
   # 镜像自带 /mosquitto-no-auth.conf 文件，允许匿名监听 1883，无需挂载自定义 conf
+  # 归属 edge 网络（边缘接入层，供设备/Mock 接入），与内部数据网络隔离
   mosquitto:
     image: eclipse-mosquitto:2.0.18
     container_name: smt-mqtt
@@ -108,8 +124,133 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - edge
+
+  # ===== Phase 2 新增：Milvus 向量库及其依赖 =====
+  # 用于 Python Agent RAG（知识助手 + 故障案例库）
+  # etcd：Milvus 元数据存储
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: smt-etcd
+    restart: unless-stopped
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+      - TZ=Asia/Shanghai
+    volumes:
+      - smt-etcd-data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - intranet
+
+  # minio：Milvus 对象存储
+  minio:
+    image: minio/minio:RELEASE.2023-03-24T21-41-23Z
+    container_name: smt-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ACCESS_KEY: ${SMT_MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${SMT_MINIO_SECRET_KEY:-minioadmin}
+      TZ: Asia/Shanghai
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - smt-minio-data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - intranet
+
+  # Milvus Standalone：向量数据库
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: smt-milvus
+    restart: unless-stopped
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: ${SMT_MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_ACCESS_KEY: ${SMT_MINIO_SECRET_KEY:-minioadmin}
+      MILVUS_AUTHORIZATION_ENABLED: "false"
+      TZ: Asia/Shanghai
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - smt-milvus-data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    command: ["milvus", "run", "standalone"]
+    networks:
+      - intranet
+
+  # ===== InfluxDB 2.x：时序数据库（Batch 4 P1 device_data 双写） =====
+  # PG 主存 + InfluxDB 时序双写，Java device-service 写入时同步落 InfluxDB
+  # 首次启动通过 DOCKER_INFLUXDB_INIT_* 自动初始化 org/bucket/admin token
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: smt-influxdb
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${SMT_INFLUXDB_ADMIN_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${SMT_INFLUXDB_ADMIN_PASSWORD:-dev-only-admin}
+      DOCKER_INFLUXDB_INIT_ORG: ${SMT_INFLUXDB_ORG:-smt}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${SMT_INFLUXDB_BUCKET:-device_data}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${SMT_INFLUXDB_TOKEN:-dev-only-token}
+      TZ: Asia/Shanghai
+    ports:
+      - "8086:8086"
+    volumes:
+      - smt-influxdb-data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - intranet
 
 volumes:
   smt-postgres-data:
   smt-redis-data:
   smt-kafka-data:
+  smt-etcd-data:
+  smt-minio-data:
+  smt-milvus-data:
+  smt-influxdb-data:
+
+networks:
+  # 内部数据网络：PG/Redis/Kafka/Zookeeper/Milvus/Etcd/MinIO/InfluxDB
+  intranet:
+    driver: bridge
+    name: smt-intranet
+  # 边缘接入网络：Mosquitto（设备/Mock 接入），与内部数据网络隔离
+  edge:
+    driver: bridge
+    name: smt-edge
+  # 应用网络：保留给未来微服务接入（Phase 3+ Java 微服务扩展）
+  app:
+    driver: bridge
+    name: smt-app

@@ -2,7 +2,6 @@ package com.smt.platform.device.config;
 
 import org.apache.ibatis.executor.statement.StatementHandler;
 import org.apache.ibatis.mapping.BoundSql;
-import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.plugin.Interceptor;
 import org.apache.ibatis.plugin.Intercepts;
 import org.apache.ibatis.plugin.Invocation;
@@ -15,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
+import java.sql.Statement;
 import java.util.Properties;
 
 /**
@@ -29,7 +29,7 @@ import java.util.Properties;
         @Signature(type = StatementHandler.class, method = "prepare",
                 args = {Connection.class, Integer.class}),
         @Signature(type = StatementHandler.class, method = "query",
-                args = {MappedStatement.class, Object.class, ResultHandler.class})
+                args = {Statement.class, ResultHandler.class})
 })
 @Component
 public class SlowSqlInterceptor implements Interceptor {

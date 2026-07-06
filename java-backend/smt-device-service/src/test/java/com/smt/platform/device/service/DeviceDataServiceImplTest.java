@@ -7,6 +7,7 @@ import com.smt.platform.device.mapper.DeviceDataMapper;
 import com.smt.platform.device.mapper.DeviceMapper;
 import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.model.entity.DeviceData;
+import com.smt.platform.device.repository.InfluxDBRepository;
 import com.smt.platform.device.service.impl.DeviceDataServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,9 @@ class DeviceDataServiceImplTest {
     @Mock
     private DeviceDataMapper deviceDataMapper;
 
+    @Mock
+    private InfluxDBRepository influxDBRepository;
+
     @InjectMocks
     private DeviceDataServiceImpl service;
 
@@ -53,6 +57,8 @@ class DeviceDataServiceImplTest {
         service.saveData(1L, "TEMP-01", "42.5", ts);
 
         verify(deviceDataMapper).insert(any(DeviceData.class));
+        // Batch 4：验证 InfluxDB 双写调用
+        verify(influxDBRepository).writeDeviceData(1L, "TEMP-01", "42.5", ts);
     }
 
     @Test

@@ -54,8 +54,9 @@ class DeviceServiceImplTest {
         assertThat(created.getDeviceCode()).isEqualTo("PRINTER-001");
         assertThat(created.getStatus()).isEqualTo("RUNNING");
         assertThat(created.getHealthScore()).isEqualTo(100);
-        assertThat(created.getDeleted()).isEqualTo(0);
-        assertThat(created.getCreateTime()).isNotNull();
+        // M5：deleted/createTime 由 MetaObjectHandler 在 insert 时自动填充，
+        // 单测环境（mocked mapper）不触发 MetaObjectHandler，故不断言这两个字段；
+        // 其填充行为由集成测试（含真实 DB + MetaObjectHandler）覆盖。
         verify(deviceMapper).insert(any(Device.class));
     }
 
@@ -103,6 +104,72 @@ class DeviceServiceImplTest {
         when(deviceMapper.selectById(1L)).thenReturn(null);
 
         assertThatThrownBy(() -> deviceService.delete(1L))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("设备不存在");
+    }
+
+    // -------- M8 补充：update + getByIdOrThrow --------
+
+    @Test
+    void update_shouldUpdateFields_whenExists() {
+        Device existing = new Device();
+        existing.setId(1L);
+        existing.setDeviceCode("PRINTER-001");
+        existing.setDeviceName("旧名称");
+        existing.setDeviceType("PRINTER");
+        existing.setStatus("RUNNING");
+        existing.setHealthScore(100);
+        when(deviceMapper.selectById(1L)).thenReturn(existing);
+
+        Device patch = new Device();
+        patch.setDeviceName("新名称");
+        patch.setStatus("STOPPED");
+        when(deviceMapper.updateById(any(Device.class))).thenReturn(1);
+
+        Device updated = deviceService.update(1L, patch);
+
+        assertThat(updated.getDeviceName()).isEqualTo("新名称");
+        assertThat(updated.getStatus()).isEqualTo("STOPPED");
+        // 未传字段保持原值
+        assertThat(updated.getDeviceCode()).isEqualTo("PRINTER-001");
+        assertThat(updated.getDeviceType()).isEqualTo("PRINTER");
+        assertThat(updated.getHealthScore()).isEqualTo(100);
+        // M5：updateTime 由 MetaObjectHandler 在 updateById 时自动填充，
+        // 单测环境（mocked mapper）不触发 MetaObjectHandler，故不断言该字段。
+        verify(deviceMapper).updateById(any(Device.class));
+    }
+
+    @Test
+    void update_shouldThrow_whenNotExists() {
+        when(deviceMapper.selectById(1L)).thenReturn(null);
+
+        Device patch = new Device();
+        patch.setDeviceName("新名称");
+
+        assertThatThrownBy(() -> deviceService.update(1L, patch))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("设备不存在");
+    }
+
+    @Test
+    void getByIdOrThrow_shouldReturnDevice_whenExists() {
+        Device device = new Device();
+        device.setId(1L);
+        device.setDeviceCode("PRINTER-001");
+        when(deviceMapper.selectById(1L)).thenReturn(device);
+
+        Device result = deviceService.getByIdOrThrow(1L);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(1L);
+        assertThat(result.getDeviceCode()).isEqualTo("PRINTER-001");
+    }
+
+    @Test
+    void getByIdOrThrow_shouldThrow_whenNotExists() {
+        when(deviceMapper.selectById(1L)).thenReturn(null);
+
+        assertThatThrownBy(() -> deviceService.getByIdOrThrow(1L))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("设备不存在");
     }

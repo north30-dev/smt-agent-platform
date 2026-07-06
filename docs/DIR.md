@@ -7,7 +7,7 @@
 # 📁 项目目录结构完整文档
 
 ## 项目名称：`smt-agent-platform`  
-**技术栈**：Java 21 (Spring Boot) + Python 3.14 (LangChain) + C++17 (CMake) + React/TS (Vite)  
+**技术栈**：Java 21 (Spring Boot) + Python 3.12 (LangChain) + C++17 (CMake) + React/TS (Vite)  
 **适用场景**：SMT贴片产线智能运维与调度（工业级Agent平台）
 
 ---
@@ -167,13 +167,13 @@ java-backend/
 ## 四、Python智能体模块（`python-agents/`）
 
 > **职责**：调度、运维、质量、知识、执行 —— **五个核心Agent协同决策**。  
-> **依赖管理**：Poetry（`pyproject.toml`）  
+> **依赖管理**：uv（`pyproject.toml`，PEP 621）
 > **运行方式**：每个Agent作为独立FastAPI服务（端口8001~8005）
 
 ```text
 python-agents/
 ├── pyproject.toml                      # 根配置：声明langchain, fastapi, grpcio, pydantic等依赖
-├── poetry.lock                         # 依赖锁定（自动生成，不手动修改）
+├── uv.lock                             # 依赖锁定（自动生成，不手动修改）
 ├── .env                                # 环境变量（大模型API_KEY, Milvus地址）—— 不提交Git
 ├── README.md                           # Python模块说明：各Agent端口映射表
 │

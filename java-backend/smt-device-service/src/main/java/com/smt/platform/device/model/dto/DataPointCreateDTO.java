@@ -3,12 +3,17 @@ package com.smt.platform.device.model.dto;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.io.Serializable;
 
 /**
  * 新增采集点请求体 DTO。
+ *
+ * <p>M3 修复：所有 String 字段加 {@code @Size} 对齐 init.sql 列长度；
+ * 枚举字段（dataType）加 {@code @Pattern} 约束合法取值。</p>
  */
 @Data
 public class DataPointCreateDTO implements Serializable {
@@ -17,18 +22,23 @@ public class DataPointCreateDTO implements Serializable {
 
     /** 采集点编码（同一设备下唯一） */
     @NotBlank(message = "采集点编码不能为空")
+    @Size(max = 64, message = "采集点编码长度不能超过64个字符")
     private String datapointCode;
 
     /** 采集点名称 */
     @NotBlank(message = "采集点名称不能为空")
+    @Size(max = 128, message = "采集点名称长度不能超过128个字符")
     private String datapointName;
 
     /** 节点路径（OPC UA NodeId 或 MQTT Topic） */
     @NotBlank(message = "节点路径不能为空")
+    @Size(max = 256, message = "节点路径长度不能超过256个字符")
     private String nodePath;
 
     /** 数据类型：NUMBER/STRING/BOOLEAN */
     @NotBlank(message = "数据类型不能为空")
+    @Pattern(regexp = "NUMBER|STRING|BOOLEAN", message = "数据类型必须为 NUMBER/STRING/BOOLEAN 之一")
+    @Size(max = 16, message = "数据类型长度不能超过16个字符")
     private String dataType;
 
     /** 采样周期（毫秒，最小 100） */

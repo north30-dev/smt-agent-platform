@@ -2,21 +2,24 @@ package com.smt.platform.device.model.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.smt.platform.common.entity.BaseEntity;
 import lombok.Data;
-
-import java.io.Serializable;
-import java.time.LocalDateTime;
+import lombok.EqualsAndHashCode;
 
 /**
  * 设备实体（对应 device 表）。
  *
  * <p>字段与 OpenAPI 的 Device schema 对齐。</p>
+ *
+ * <p>M5 改造：继承 {@link BaseEntity}，统一 createTime/updateTime/createBy/updateBy/deleted
+ * 字段由 {@link com.smt.platform.common.config.MyMetaObjectHandler} 自动填充，
+ * 不再在 ServiceImpl 中手写时间戳。</p>
  */
 @Data
+@EqualsAndHashCode(callSuper = true)
 @TableName("device")
-public class Device implements Serializable {
+public class Device extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
@@ -50,14 +53,4 @@ public class Device implements Serializable {
 
     /** 健康评分（0-100，分数越高越健康） */
     private Integer healthScore;
-
-    /** 软删除标记：0-未删除，1-已删除 */
-    @TableLogic
-    private Integer deleted;
-
-    /** 创建时间 */
-    private LocalDateTime createTime;
-
-    /** 最近更新时间 */
-    private LocalDateTime updateTime;
 }

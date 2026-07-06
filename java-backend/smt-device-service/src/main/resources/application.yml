@@ -42,6 +42,9 @@ spring:
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
+  # M4 修复：未匹配路径抛 NoHandlerFoundException，由 GlobalExceptionHandler 返回 JSON 404
+  mvc:
+    throw-exception-if-no-handler-found: true
 
 # MyBatis-Plus 配置
 # 注：log-impl 已迁移到 application-dev.yml/application-prod.yml（P0-8 日志 Profile 隔离）
@@ -100,6 +103,22 @@ smt:
     broker: ${SMT_MQTT_BROKER:tcp://localhost:1883}
     client-id-prefix: smt-device-
     qos: 1
+  # 健康评分规则配置（m8）— 默认值与原 HealthScoreCalculator 硬编码一致
+  health:
+    score:
+      score-maintenance: 30
+      score-stopped: 50
+      base-score: 100
+      score-max: 100
+      score-min: 0
+      recent-window-minutes: 5
+      temp-threshold-low: 80.0
+      temp-threshold-high: 100.0
+      vib-threshold-low: 10.0
+      vib-threshold-high: 20.0
+      deduction-high: 40
+      deduction-low: 20
+
   # Mock 数据生成器开关
   mock:
     enabled: false
@@ -113,5 +132,13 @@ smt:
       - device-id: 1
         datapoint-code: vibration
         topic: smt/device/1/vibration
+
+  # InfluxDB 时序数据库（P1：device_data 双写，PG 主存 + InfluxDB 时序）
+  # 注：org-name 用 kebab-case，Spring relaxed binding 自动映射到 InfluxDBConfig.orgName 字段
+  influxdb:
+    url: ${SMT_INFLUXDB_URL:http://localhost:8086}
+    token: ${SMT_INFLUXDB_TOKEN:dev-only-token}
+    org-name: ${SMT_INFLUXDB_ORG:smt}
+    bucket: ${SMT_INFLUXDB_BUCKET:device_data}
 
 # 注：logging 段已迁移到 logback-spring.xml 与 application-{profile}.yml（P0-8）
