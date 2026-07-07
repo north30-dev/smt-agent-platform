@@ -16,12 +16,20 @@ def _register_kebab_packages():
     这里通过 importlib 把 agent-knowledge 注册为 agent_knowledge 模块，
     使测试中 `from agent_knowledge.rag_chain import ...` 可用。
 
-    Gap: 当前仅注册 agent-knowledge/agent-maintenance 两个包，
+    Gap: 当前仅注册 agent-knowledge/agent-maintenance/agent-quality/agent-orchestrator/agent-scheduler 五个包，
     新增 Agent 时需手动追加到 PACKAGES 列表。
     未来考虑改用 setuptools entry_points 或 namespace package 自动发现。
     """
     root = Path(__file__).parent.parent
-    for kebab in ["agent-knowledge", "agent-maintenance"]:
+    # Gap: 仅显式列举各 Agent 包名。新增 Agent 时需手动追加到列表。
+    # 未来考虑改用 setuptools entry_points 或 namespace package 自动发现。
+    for kebab in [
+        "agent-knowledge",
+        "agent-maintenance",
+        "agent-quality",
+        "agent-orchestrator",
+        "agent-scheduler",
+    ]:
         underscore = kebab.replace("-", "_")
         if underscore in sys.modules:
             continue

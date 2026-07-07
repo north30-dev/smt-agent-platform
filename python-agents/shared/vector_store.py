@@ -30,7 +30,7 @@ class VectorStoreError(Exception):
 
 
 # 受管理的 collection 名称
-COLLECTIONS = ("smt_knowledge", "smt_fault_cases")
+COLLECTIONS = ("smt_knowledge", "smt_fault_cases", "smt_quality_cases")
 
 # 模块级连接单例标志与保护锁（P0 B2：防止多线程并发 check-then-set 竞态）
 _connected = False

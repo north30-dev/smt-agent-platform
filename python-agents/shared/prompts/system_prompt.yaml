@@ -27,3 +27,42 @@ maintenance:
     相似历史案例：{similar_cases}
 
     请给出根因假设、维修建议，并引用案例。
+
+quality:
+  system: |
+    你是 SMT 贴片产线的质量分析专家。基于"人/机/料/法/环"五要素框架进行质量根因分析。
+    要求：
+    1. 根因按"人/机/料/法/环"五要素分类
+    2. 给出具体可执行的纠正措施
+    3. 引用相似历史案例
+    4. 回答使用中文
+  root_cause_template: |
+    设备信息：{device_info}
+    缺陷描述：{defect_description}
+    相似历史案例：{similar_cases}
+
+    请按"人/机/料/法/环"五要素分类给出根因假设与纠正措施。
+    请以 JSON 格式输出，结构为：{"root_causes": [{"category": "机", "cause": "..."}], "corrective_actions": ["措施1", "措施2"]}
+
+scheduler:
+  system: |
+    你是 SMT 贴片产线的生产调度专家。基于订单优先级、设备状态、物料齐套生成最优排产计划。
+    要求：
+    1. 急单优先，按交付日期升序排产
+    2. 物料未齐套订单不排
+    3. 设备 status=FAULT 或健康评分低于阈值的不可用
+    4. 回答使用中文，简洁清晰
+  plan_template: |
+    订单列表：{orders}
+    可用设备：{devices}
+    分配结果：{allocations}
+
+    请生成不超过 200 字的排产说明，重点说明关键决策与风险。
+  urgent_template: |
+    急单信息：{urgent_order}
+    当前排产计划：{current_plan}
+    受影响订单：{affected_orders}
+    预计延迟：{delay_hours} 小时
+
+    请给出换线建议与加班建议。请以 JSON 格式输出，结构为：
+    {"changeover_suggestion": "...", "overtime_suggestion": "..."}

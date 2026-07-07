@@ -32,6 +32,30 @@ spring:
             - Path=/api/agent/maintenance/**
           filters:
             - StripPrefix=2
+        # Phase 3 新增：质量分析 Agent 路由
+        # /api/agent/quality/** → agent-quality（8003），StripPrefix=2 剥离 /api/agent，Python 收到 /quality/**
+        - id: agent-quality
+          uri: http://${SMT_AGENT_QUALITY_HOST:localhost}:${SMT_AGENT_QUALITY_PORT:8003}
+          predicates:
+            - Path=/api/agent/quality/**
+          filters:
+            - StripPrefix=2
+        # Phase 3 新增：调度智能体路由
+        # /api/agent/scheduler/** → agent-scheduler（8001），StripPrefix=2 剥离 /api/agent，Python 收到 /scheduler/**
+        - id: agent-scheduler
+          uri: http://${SMT_AGENT_SCHEDULER_HOST:localhost}:${SMT_AGENT_SCHEDULER_PORT:8001}
+          predicates:
+            - Path=/api/agent/scheduler/**
+          filters:
+            - StripPrefix=2
+        # Phase 3 新增：Agent 编排服务路由
+        # /api/agent/orchestrator/** → agent-orchestrator（8005），StripPrefix=2 剥离 /api/agent，Python 收到 /orchestrator/**
+        - id: agent-orchestrator
+          uri: http://${SMT_AGENT_ORCHESTRATOR_HOST:localhost}:${SMT_AGENT_ORCHESTRATOR_PORT:8005}
+          predicates:
+            - Path=/api/agent/orchestrator/**
+          filters:
+            - StripPrefix=2
 
 # 注：logging 段已迁移到 logback-spring.xml（P0-8）
 

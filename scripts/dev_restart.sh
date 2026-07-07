@@ -45,9 +45,9 @@ echo $! > "$LOG_DIR/smt-gateway.pid"
 cd "$PROJECT_ROOT"
 
 echo "========== [4/4] 重启 Python 智能体 =========="
-# ===== 启动 Python Agents（Phase 2）=====
+# ===== 启动 Python Agents（Phase 2 + Phase 3）=====
 # 先停掉旧进程（如有 PID 文件则 kill）
-for agent in agent-knowledge agent-maintenance; do
+for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler agent-orchestrator; do
     if [ -f "$LOG_DIR/${agent}.pid" ]; then
         old_pid=$(cat "$LOG_DIR/${agent}.pid")
         if kill -0 "$old_pid" 2>/dev/null; then
@@ -67,6 +67,20 @@ echo $! > "$LOG_DIR/agent-knowledge.pid"
 echo "启动 agent-maintenance (8002)..."
 uv run uvicorn agent-maintenance.main:app --port 8002 --host 0.0.0.0 > "$LOG_DIR/agent-maintenance.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-maintenance.pid"
+
+# ===== Phase 3 新增 Agent（8001 调度 / 8003 质量 / 8005 编排）=====
+# orchestrator 依赖 maintenance/quality/scheduler，因此最后启动
+echo "启动 agent-scheduler (8001)..."
+uv run uvicorn agent-scheduler.main:app --port 8001 --host 0.0.0.0 > "$LOG_DIR/agent-scheduler.log" 2>&1 &
+echo $! > "$LOG_DIR/agent-scheduler.pid"
+
+echo "启动 agent-quality (8003)..."
+uv run uvicorn agent-quality.main:app --port 8003 --host 0.0.0.0 > "$LOG_DIR/agent-quality.log" 2>&1 &
+echo $! > "$LOG_DIR/agent-quality.pid"
+
+echo "启动 agent-orchestrator (8005)..."
+uv run uvicorn agent-orchestrator.main:app --port 8005 --host 0.0.0.0 > "$LOG_DIR/agent-orchestrator.log" 2>&1 &
+echo $! > "$LOG_DIR/agent-orchestrator.pid"
 cd "$PROJECT_ROOT"
 
 echo "========== 本地服务重启完成 =========="
