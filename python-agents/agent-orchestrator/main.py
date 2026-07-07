@@ -3,7 +3,7 @@
 端口 8005。对外提供设备故障编排入口与工作流查询接口。
 路径前缀 /v1/orchestrator/**。
 
-编排流程：设备故障 → 并行调用 maintenance / quality / scheduler → LLM 汇总。
+编排流程：设备故障 → 串行调用 maintenance → quality → scheduler → LLM 汇总。
 任何子 Agent 不可用时降级为 skipped 状态，工作流继续执行。
 """
 

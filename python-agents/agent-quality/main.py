@@ -14,7 +14,7 @@ from shared.observability import get_logger, register_health_endpoint, setup_log
 from shared.vector_store import VectorStoreError
 
 # agent-quality 本地的 device-service 异常类型
-from .device_client import DeviceServiceUnavailable
+from shared.device_client import DeviceServiceUnavailable
 
 from . import alert_store, monitor, root_cause
 from .models import (

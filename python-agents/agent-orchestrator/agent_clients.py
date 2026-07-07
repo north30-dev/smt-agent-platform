@@ -2,7 +2,7 @@
 
 封装 maintenance / quality / scheduler 三个子 Agent 的 HTTP 调用。
 - 使用 httpx.AsyncClient 避免阻塞事件循环。
-- 引入 tenacity 重试（仅对 ConnectError/TimeoutException）。
+- 引入 tenacity 重试（对 ConnectError/TimeoutException/ServiceBusy）。
 - 网络错误统一抛出 AgentUnavailable，由 nodes 层捕获并降级为 skipped 状态。
 
 参考 agent-maintenance/device_client.py 的实现模式。
@@ -13,10 +13,14 @@ from tenacity import (
     AsyncRetrying,
     retry_if_exception_type,
     stop_after_attempt,
-    wait_exponential,
+    wait_exponential_jitter,
 )
 
 from shared.config import settings
+
+
+class ServiceBusy(Exception):
+    """子 Agent 返回 502/503/504 — 暂时繁忙（如正在处理 LLM 长耗时请求），可重试。"""
 
 
 class AgentUnavailable(Exception):
@@ -58,7 +62,8 @@ class AgentClients:
     def _get_http_client(self) -> httpx.AsyncClient:
         """获取 HTTP 客户端（懒初始化，避免 import 时即创建连接）。"""
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=15.0)
+            # 60s 超时：子 Agent 的 LLM 调用（如根因分析）可能耗时 20-30s
+            self._client = httpx.AsyncClient(timeout=60.0)
         return self._client
 
     async def _post(self, agent_name: str, url: str, payload: dict) -> dict:
@@ -78,12 +83,12 @@ class AgentClients:
         http_client = self._get_http_client()
         resp: httpx.Response | None = None
 
-        # 仅对网络错误重试，HTTP 业务错误不重试
+        # 对网络错误和 502/503/504 重试，其余 HTTP 业务错误不重试
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=0.5, min=0.5, max=3),
+            wait=wait_exponential_jitter(initial=0.5, max=3, jitter=0.5),
             retry=retry_if_exception_type(
-                (httpx.ConnectError, httpx.TimeoutException)
+                (httpx.ConnectError, httpx.TimeoutException, ServiceBusy)
             ),
             reraise=True,
         ):
@@ -94,6 +99,10 @@ class AgentClients:
                 except (httpx.ConnectError, httpx.TimeoutException):
                     raise
                 except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code in (502, 503, 504):
+                        raise ServiceBusy(
+                            f"{agent_name} agent 繁忙 (HTTP {exc.response.status_code})"
+                        ) from exc
                     raise AgentUnavailable(
                         agent_name,
                         f"{agent_name} agent 返回非 2xx: {exc.response.status_code}",
@@ -124,7 +133,7 @@ class AgentClients:
             return await self._post(
                 "maintenance", url, {"device_id": device_id, "symptom": symptom}
             )
-        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+        except (httpx.ConnectError, httpx.TimeoutException, ServiceBusy) as exc:
             raise AgentUnavailable(
                 "maintenance", f"maintenance agent 不可达: {exc}"
             ) from exc
@@ -147,7 +156,7 @@ class AgentClients:
                 url,
                 {"device_id": device_id, "defect_description": defect_description},
             )
-        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+        except (httpx.ConnectError, httpx.TimeoutException, ServiceBusy) as exc:
             raise AgentUnavailable(
                 "quality", f"quality agent 不可达: {exc}"
             ) from exc
@@ -158,6 +167,7 @@ class AgentClients:
         product_model: str,
         quantity: int,
         delivery_date: str,
+        source: str = "user",
     ) -> dict:
         """调用 scheduler urgent 接口（急单插单）。
 
@@ -166,6 +176,7 @@ class AgentClients:
             product_model: 产品型号。
             quantity: 数量。
             delivery_date: 交付日期（ISO 日期字符串）。
+            source: 订单来源（user/orchestrator_synthetic），用于追溯合成急单。
 
         Returns:
             {"urgent_order_no": str, "affected_orders": [...],
@@ -183,9 +194,10 @@ class AgentClients:
                     "product_model": product_model,
                     "quantity": quantity,
                     "delivery_date": delivery_date,
+                    "source": source,
                 },
             )
-        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+        except (httpx.ConnectError, httpx.TimeoutException, ServiceBusy) as exc:
             raise AgentUnavailable(
                 "scheduler", f"scheduler agent 不可达: {exc}"
             ) from exc

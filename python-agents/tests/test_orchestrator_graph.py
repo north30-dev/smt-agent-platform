@@ -109,7 +109,7 @@ async def test_graph_state_accumulates_in_order(monkeypatch):
         call_order.append("quality")
         return {"root_causes": ["q"]}
 
-    async def _track_scheduler(order_no, product_model, quantity, delivery_date):
+    async def _track_scheduler(order_no, product_model, quantity, delivery_date, source="user"):
         call_order.append("scheduler")
         return {"urgent_order_no": order_no}
 

@@ -46,6 +46,7 @@ async def save_order(
     priority: str,
     delivery_date: str,
     material_ready: bool,
+    source: str = "user",
 ) -> int:
     """插入订单，返回新生成的 order_id。
 
@@ -56,6 +57,7 @@ async def save_order(
         priority: 优先级（URGENT/HIGH/NORMAL/LOW）。
         delivery_date: 交付日期（ISO 日期 YYYY-MM-DD）。
         material_ready: 物料是否齐套。
+        source: 订单来源（user/orchestrator_synthetic），用于追溯合成急单。
 
     Returns:
         新生成的 order_id。
@@ -70,8 +72,8 @@ async def save_order(
         row = await conn.fetchrow(
             "INSERT INTO production_orders "
             "(order_no, product_model, quantity, priority, delivery_date, "
-            "material_ready, status) "
-            "VALUES ($1, $2, $3, $4, $5, $6, 'PENDING') "
+            "material_ready, status, source) "
+            "VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7) "
             "RETURNING order_id",
             order_no,
             product_model,
@@ -79,6 +81,7 @@ async def save_order(
             priority,
             delivery,
             material_ready,
+            source,
         )
     return int(row["order_id"])
 
@@ -97,16 +100,16 @@ async def list_orders(status: str | None = None) -> list[dict]:
         if status:
             rows = await conn.fetch(
                 "SELECT order_id, order_no, product_model, quantity, priority, "
-                "delivery_date, material_ready, status, created_at, updated_at "
-                "FROM production_orders WHERE status = $1 "
+                "delivery_date, material_ready, status, source, created_at, "
+                "updated_at FROM production_orders WHERE status = $1 "
                 "ORDER BY delivery_date ASC",
                 status,
             )
         else:
             rows = await conn.fetch(
                 "SELECT order_id, order_no, product_model, quantity, priority, "
-                "delivery_date, material_ready, status, created_at, updated_at "
-                "FROM production_orders ORDER BY delivery_date ASC"
+                "delivery_date, material_ready, status, source, created_at, "
+                "updated_at FROM production_orders ORDER BY delivery_date ASC"
             )
     return [_row_to_dict(r) for r in rows]
 
@@ -234,6 +237,7 @@ def _row_to_dict(row: asyncpg.Record) -> dict:
         else "",
         "material_ready": bool(row["material_ready"]),
         "status": row["status"],
+        "source": row["source"],
         "created_at": _fmt_ts(row["created_at"]),
         "updated_at": _fmt_ts(row["updated_at"]),
     }

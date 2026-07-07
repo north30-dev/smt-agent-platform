@@ -3,6 +3,8 @@
 字段命名统一 snake_case，与 OpenAPI 契约对齐。
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -12,9 +14,8 @@ class OrderCreateRequest(BaseModel):
     order_no: str = Field(..., min_length=1, max_length=64, description="订单编号")
     product_model: str = Field(..., min_length=1, max_length=64, description="产品型号")
     quantity: int = Field(..., ge=1, description="订单数量")
-    priority: str = Field(
-        "NORMAL",
-        description="优先级：URGENT / HIGH / NORMAL / LOW",
+    priority: Literal["URGENT", "HIGH", "NORMAL", "LOW"] = Field(
+        "NORMAL", description="优先级：URGENT / HIGH / NORMAL / LOW"
     )
     delivery_date: str = Field(..., description="交付日期（ISO 日期 YYYY-MM-DD）")
     material_ready: bool = Field(False, description="物料是否齐套")
@@ -78,6 +79,7 @@ class UrgentRequest(BaseModel):
     product_model: str = Field(..., min_length=1, max_length=64, description="产品型号")
     quantity: int = Field(..., ge=1, description="订单数量")
     delivery_date: str = Field(..., description="交付日期（ISO 日期 YYYY-MM-DD）")
+    source: str = Field("user", description="订单来源（user/orchestrator_synthetic）")
 
 
 class AffectedOrderVO(BaseModel):

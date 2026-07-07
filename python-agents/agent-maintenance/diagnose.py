@@ -7,7 +7,6 @@
 
 import asyncio
 import json
-import re
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -16,8 +15,9 @@ from uuid import uuid4
 import yaml
 
 from shared import llm_client, vector_store
+from shared.text_utils import extract_json_block as _extract_json_block
 
-from .device_client import DeviceServiceUnavailable, device_client
+from shared.device_client import DeviceServiceUnavailable, device_client
 
 # 故障案例 collection 名
 COLLECTION = "smt_fault_cases"
@@ -226,28 +226,6 @@ def _parse_llm_output(raw_text: str) -> tuple[list[str], list[str]]:
 
     # 降级：整段文本作为根因
     return [raw_text], []
-
-
-def _extract_json_block(text: str) -> str | None:
-    """从 markdown 代码块或裸 JSON 中提取 JSON 文本。
-
-    优先匹配带 json 语言标识的围栏块，取最后一个有效 JSON 代码块
-    （LLM 常先给示例再给正式输出）；fallback 用正则捕获最外层 {...} 或 [...]。
-    """
-    pattern = r"```(?:json|JSON)?\s*\n(.*?)\n\s*```"
-    matches = re.findall(pattern, text, re.DOTALL)
-    if matches:
-        for candidate in reversed(matches):
-            stripped = candidate.strip()
-            if stripped.startswith("{") or stripped.startswith("["):
-                return stripped
-    obj_match = re.search(r"\{.*\}", text, re.DOTALL)
-    if obj_match:
-        return obj_match.group(0)
-    arr_match = re.search(r"\[.*\]", text, re.DOTALL)
-    if arr_match:
-        return arr_match.group(0)
-    return None
 
 
 def _extract_lists(data: dict) -> tuple[list[str], list[str]]:

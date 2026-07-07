@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent_quality import alert_store, monitor
-from agent_quality.device_client import DeviceServiceUnavailable
+from shared.device_client import DeviceServiceUnavailable
 
 
 @pytest.fixture(autouse=True)

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # 一键重启所有本地开发服务（中间件 + 各语言服务）
+# 适用场景：服务已运行过，仅重启（不停中间件、不初始化 DB）
+# 全新环境冷启动请用：bash scripts/start_all.sh
 # 用法: bash scripts/dev_restart.sh
 
 set -e
@@ -7,21 +9,34 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# 日志与 PID 目录（Phase 2 起 Python Agents 后台进程使用）
+# 端口与地址配置（统一从 config.sh 读取，改端口改 config.sh 即可）
+source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
+
 LOG_DIR="$PROJECT_ROOT/logs"
 mkdir -p "$LOG_DIR"
 
-echo "========== [1/4] 重启中间件 =========="
+echo "========== [1/4] 检查中间件 =========="
+# dev_restart 不重启中间件，仅检查是否在运行
 cd "$PROJECT_ROOT/docker-compose"
-docker-compose down
-docker-compose up -d
+# 检查 PostgreSQL 端口作为中间件是否运行的标志
+if ss -tln 2>/dev/null | grep -q ":$PG_PORT "; then
+    echo "中间件已运行 ✓"
+else
+    echo "[WARN] 中间件未运行，启动中间件（跳过 Kafka/Zookeeper 以避免 429）..."
+    docker compose up -d postgres redis mosquitto influxdb etcd minio milvus 2>&1 | tail -5
+    echo "等待中间件就绪..."
+    for i in $(seq 1 30); do
+        if ss -tln 2>/dev/null | grep -q ":$PG_PORT "; then break; fi
+        sleep 1
+    done
+fi
 cd "$PROJECT_ROOT"
 
 echo "========== [2/4] 重启 C++ 原生层 =========="
 echo "[SKIP] cpp-native 暂未实现，跳过"
 
 echo "========== [3/4] 重启 Java 后端 =========="
-# 先停掉旧进程（如有 PID 文件则 kill），沿用 [4/4] Python Agent 段的 PID 管理模式
+# 先停掉旧进程（如有 PID 文件则 kill）
 for module in smt-device-service smt-gateway; do
     if [ -f "$LOG_DIR/${module}.pid" ]; then
         old_pid=$(cat "$LOG_DIR/${module}.pid")
@@ -35,17 +50,16 @@ for module in smt-device-service smt-gateway; do
 done
 
 cd "$PROJECT_ROOT/java-backend"
-echo "启动 smt-device-service (8081)..."
+echo "启动 smt-device-service ($JAVA_PORT)..."
 mvn -pl smt-device-service spring-boot:run > "$LOG_DIR/smt-device-service.log" 2>&1 &
 echo $! > "$LOG_DIR/smt-device-service.pid"
 
-echo "启动 smt-gateway (8080)..."
+echo "启动 smt-gateway ($GATEWAY_PORT)..."
 mvn -pl smt-gateway spring-boot:run > "$LOG_DIR/smt-gateway.log" 2>&1 &
 echo $! > "$LOG_DIR/smt-gateway.pid"
 cd "$PROJECT_ROOT"
 
 echo "========== [4/4] 重启 Python 智能体 =========="
-# ===== 启动 Python Agents（Phase 2 + Phase 3）=====
 # 先停掉旧进程（如有 PID 文件则 kill）
 for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler agent-orchestrator; do
     if [ -f "$LOG_DIR/${agent}.pid" ]; then
@@ -59,27 +73,26 @@ for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler age
     fi
 done
 
-echo "启动 agent-knowledge (8004)..."
 cd "$PROJECT_ROOT/python-agents"
-uv run uvicorn agent-knowledge.main:app --port 8004 --host 0.0.0.0 > "$LOG_DIR/agent-knowledge.log" 2>&1 &
+echo "启动 agent-knowledge ($KNOWLEDGE_PORT)..."
+uv run uvicorn agent-knowledge.main:app --port "$KNOWLEDGE_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-knowledge.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-knowledge.pid"
 
-echo "启动 agent-maintenance (8002)..."
-uv run uvicorn agent-maintenance.main:app --port 8002 --host 0.0.0.0 > "$LOG_DIR/agent-maintenance.log" 2>&1 &
+echo "启动 agent-maintenance ($MAINTENANCE_PORT)..."
+uv run uvicorn agent-maintenance.main:app --port "$MAINTENANCE_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-maintenance.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-maintenance.pid"
 
-# ===== Phase 3 新增 Agent（8001 调度 / 8003 质量 / 8005 编排）=====
 # orchestrator 依赖 maintenance/quality/scheduler，因此最后启动
-echo "启动 agent-scheduler (8001)..."
-uv run uvicorn agent-scheduler.main:app --port 8001 --host 0.0.0.0 > "$LOG_DIR/agent-scheduler.log" 2>&1 &
+echo "启动 agent-scheduler ($SCHEDULER_PORT)..."
+uv run uvicorn agent-scheduler.main:app --port "$SCHEDULER_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-scheduler.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-scheduler.pid"
 
-echo "启动 agent-quality (8003)..."
-uv run uvicorn agent-quality.main:app --port 8003 --host 0.0.0.0 > "$LOG_DIR/agent-quality.log" 2>&1 &
+echo "启动 agent-quality ($QUALITY_PORT)..."
+uv run uvicorn agent-quality.main:app --port "$QUALITY_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-quality.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-quality.pid"
 
-echo "启动 agent-orchestrator (8005)..."
-uv run uvicorn agent-orchestrator.main:app --port 8005 --host 0.0.0.0 > "$LOG_DIR/agent-orchestrator.log" 2>&1 &
+echo "启动 agent-orchestrator ($ORCHESTRATOR_PORT)..."
+uv run uvicorn agent-orchestrator.main:app --port "$ORCHESTRATOR_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-orchestrator.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-orchestrator.pid"
 cd "$PROJECT_ROOT"
 

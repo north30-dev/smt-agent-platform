@@ -146,7 +146,7 @@ paths:
                       doc_name: SMT印刷机维护手册.pdf
                       chunk_count: 42
                       create_time: '2026-06-27T08:30:00Z'
-  /api/agent/knowledge/documents/{docId}:
+  /api/agent/knowledge/documents/{doc_id}:
     delete:
       tags:
         - 知识助手
@@ -170,7 +170,7 @@ paths:
                     success: true
                     deleted_chunks: 42
         '400':
-          description: 参数错误（docId 格式不合法）
+          description: 参数错误（doc_id 格式不合法）
           content:
             application/json:
               schema:
@@ -181,7 +181,7 @@ paths:
                   value:
                     error: INVALID_DOC_ID
                     message: 文档 ID 格式不合法
-  /api/agent/maintenance/health/{deviceId}:
+  /api/agent/maintenance/health/{device_id}:
     get:
       tags:
         - 设备运维
@@ -209,7 +209,7 @@ paths:
                     risk_level: LOW
                     analysis: 设备运行平稳，温度与振动指标均在阈值范围内。
         '400':
-          description: 参数错误（deviceId 不合法）
+          description: 参数错误（device_id 不合法）
           content:
             application/json:
               schema:
@@ -302,7 +302,7 @@ paths:
                   value:
                     error: UPSTREAM_UNAVAILABLE
                     message: 设备服务暂不可用
-  /api/agent/maintenance/predict/{deviceId}:
+  /api/agent/maintenance/predict/{device_id}:
     get:
       tags:
         - 设备运维
@@ -338,7 +338,7 @@ paths:
                     recommendation: 建议在 12 小时内检查散热系统并降低负载。
                     data_sufficient: true
         '400':
-          description: 参数错误（deviceId 不合法）
+          description: 参数错误（device_id 不合法）
           content:
             application/json:
               schema:
@@ -409,7 +409,7 @@ paths:
                   value:
                     error: INVALID_CASE
                     message: 设备类型、故障现象、根因、解决方案均为必填
-  /api/agent/quality/monitor/{deviceId}:
+  /api/agent/quality/monitor/{device_id}:
     get:
       tags:
         - 质量分析
@@ -1060,7 +1060,7 @@ paths:
 components:
   parameters:
     DocIdPathParam:
-      name: docId
+      name: doc_id
       in: path
       description: 知识库文档 ID
       required: true
@@ -1068,7 +1068,7 @@ components:
         type: string
         example: doc-2026-0001
     DeviceIdPathParam:
-      name: deviceId
+      name: device_id
       in: path
       description: 设备 ID
       required: true
@@ -1960,6 +1960,11 @@ components:
           format: date
           description: 交付日期（ISO-8601 date）
           example: '2026-07-08'
+        source:
+          type: string
+          description: 订单来源（user/orchestrator_synthetic），用于追溯合成急单
+          default: user
+          example: user
     SchedulerAffectedOrder:
       type: object
       description: 受急单影响的订单

@@ -1,11 +1,13 @@
-"""Java device-service HTTP 客户端封装（agent-scheduler 本地版本）。
+"""Java device-service HTTP 客户端封装（共享版）。
 
-封装设备列表查询与设备详情查询两类接口。错误统一抛出
-DeviceServiceUnavailable，由 main.py 异常处理器兜底。
+封装设备信息查询、采集点列表、采集点历史数据查询、设备列表查询接口。
+错误统一抛出 DeviceServiceUnavailable，由各 Agent 的 main.py 异常处理器兜底。
 
-参考 agent-maintenance/device_client.py 的实现模式：
+C4：从 agent-maintenance / agent-quality / agent-scheduler 三处副本合并而来。
 - 全接口 async，使用 httpx.AsyncClient 避免阻塞事件循环。
 - 引入 tenacity 重试（仅对 ConnectError/TimeoutException 重试）。
+- 重试耗尽后 ConnectError/TimeoutException 转换为 DeviceServiceUnavailable，
+  避免裸 httpx 异常泄露到上层（main.py 只处理 DeviceServiceUnavailable）。
 - 模块级单例 + reset_device_client() 便于测试 mock。
 """
 
@@ -53,29 +55,40 @@ class DeviceClient:
     ) -> dict | list | None:
         """统一请求与响应解析（含重试）。
 
+        重试仅对 ConnectError/TimeoutException 生效，重试耗尽后转换为
+        DeviceServiceUnavailable，确保上层只需处理单一异常类型。
+
         Returns:
             device-service 返回的 data 字段。
+
+        Raises:
+            DeviceServiceUnavailable: 网络错误、HTTP 非 2xx 或响应非 JSON。
         """
         url = f"{self._base_url}{path}"
         http_client = self._get_http_client()
         resp: httpx.Response | None = None
 
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(settings.device_service_max_retries + 1),
-            wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
-            retry=retry_if_exception_type(
-                (httpx.ConnectError, httpx.TimeoutException)
-            ),
-            reraise=True,
-        ):
-            with attempt:
-                try:
-                    resp = await http_client.get(url, params=params)
-                    resp.raise_for_status()
-                except (httpx.ConnectError, httpx.TimeoutException):
-                    raise
-                except httpx.HTTPStatusError as exc:
-                    raise DeviceServiceUnavailable(str(exc)) from exc
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(settings.device_service_max_retries + 1),
+                wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
+                retry=retry_if_exception_type(
+                    (httpx.ConnectError, httpx.TimeoutException)
+                ),
+                reraise=True,
+            ):
+                with attempt:
+                    try:
+                        resp = await http_client.get(url, params=params)
+                        resp.raise_for_status()
+                    except (httpx.ConnectError, httpx.TimeoutException):
+                        raise
+                    except httpx.HTTPStatusError as exc:
+                        raise DeviceServiceUnavailable(str(exc)) from exc
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            raise DeviceServiceUnavailable(
+                f"device-service 不可达：{exc}"
+            ) from exc
 
         if resp is None:
             raise DeviceServiceUnavailable("device-service 请求失败：无响应")
@@ -92,6 +105,50 @@ class DeviceClient:
                 f"device-service 业务错误: {data.get('message')}"
             )
         return data.get("data")
+
+    async def get_device(self, device_id: int) -> dict:
+        """GET /api/device/{id}，返回设备详情。
+
+        Raises:
+            DeviceServiceUnavailable: device-service 返回空数据。
+        """
+        data = await self._request(f"/api/device/{device_id}")
+        if data is None:
+            raise DeviceServiceUnavailable(
+                f"device-service 返回空数据：device_id={device_id}"
+            )
+        return data
+
+    async def get_device_data(
+        self,
+        device_id: int,
+        datapoint_code: str,
+        start_time: str,
+        end_time: str,
+        size: int = 1000,
+    ) -> list[dict]:
+        """GET /api/device/{id}/data?...，返回 records 列表。"""
+        data = await self._request(
+            f"/api/device/{device_id}/data",
+            params={
+                "datapointCode": datapoint_code,
+                "startTime": start_time,
+                "endTime": end_time,
+                "page": 1,
+                "size": size,
+            },
+        )
+        if data is None:
+            return []
+        records = data.get("records")
+        return records or []
+
+    async def list_datapoints(self, device_id: int) -> list[dict]:
+        """GET /api/device/{id}/datapoints，返回采集点列表。"""
+        data = await self._request(f"/api/device/{device_id}/datapoints")
+        if data is None:
+            return []
+        return data
 
     async def list_devices(self, status: str | None = None) -> list[dict]:
         """GET /api/device/list，返回设备列表。
@@ -112,15 +169,6 @@ class DeviceClient:
         records = data.get("records")
         return records or []
 
-    async def get_device(self, device_id: int) -> dict:
-        """GET /api/device/{id}，返回设备详情。"""
-        data = await self._request(f"/api/device/{device_id}")
-        if data is None:
-            raise DeviceServiceUnavailable(
-                f"device-service 返回空数据：device_id={device_id}"
-            )
-        return data
-
 
 # 模块级单例（AsyncClient 懒初始化，import 时不创建连接）
 device_client = DeviceClient()
@@ -134,4 +182,5 @@ def get_device_client() -> DeviceClient:
 def reset_device_client() -> None:
     """重置单例的内部 HTTP 客户端（仅供测试使用）。"""
     global device_client
-    device_client._client = None
+    if device_client._owns_client:
+        device_client._client = None

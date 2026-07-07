@@ -79,7 +79,11 @@ async def scheduler_node(state: OrchestratorState) -> dict:
 
     try:
         result = await agent_clients.call_scheduler(
-            order_no, product_model, quantity, delivery_date
+            order_no,
+            product_model,
+            quantity,
+            delivery_date,
+            source="orchestrator_synthetic",
         )
     except AgentUnavailable as exc:
         return {

@@ -14,7 +14,7 @@ from shared.observability import get_logger, register_health_endpoint, setup_log
 from shared.vector_store import VectorStoreError
 
 from . import diagnose, predict
-from .device_client import DeviceServiceUnavailable, device_client
+from shared.device_client import DeviceServiceUnavailable, device_client
 from .models import (
     CaseCreateRequest,
     CaseCreateResponse,

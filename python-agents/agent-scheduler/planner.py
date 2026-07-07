@@ -24,7 +24,8 @@ from shared import llm_client
 from shared.config import settings
 
 from . import order_store
-from .device_client import device_client
+from shared.device_client import device_client
+from shared.text_utils import truncate as _truncate
 
 # Prompt 模板文件
 _PROMPT_FILE = Path(__file__).parent.parent / "shared" / "prompts" / "system_prompt.yaml"
@@ -57,12 +58,14 @@ async def generate_plan() -> dict:
         # device-service 不可达时交由 main 异常处理器兜底
         raise
 
-    usable_devices = [
-        d
-        for d in devices
-        if int(d.get("healthScore") or 0)
-        >= settings.scheduler_device_min_health_score
-    ]
+    usable_devices = []
+    for d in devices:
+        try:
+            score = int(d.get("healthScore") or 0)
+        except (TypeError, ValueError):
+            continue
+        if score >= settings.scheduler_device_min_health_score:
+            usable_devices.append(d)
     if not usable_devices:
         return _empty_plan(
             "无可用设备（无 status=RUNNING 且 healthScore 达阈值的设备）",
@@ -84,27 +87,32 @@ async def generate_plan() -> dict:
 
     # 6. 加载 prompt，调 LLM 生成说明
     system_prompt, plan_template = _load_prompts()
-    user_content = plan_template.format(
-        orders=_truncate(json.dumps(sorted_orders, ensure_ascii=False), 1500),
-        devices=_truncate(
-            json.dumps(
-                [
-                    {
-                        "id": d.get("id"),
-                        "deviceName": d.get("deviceName"),
-                        "deviceType": d.get("deviceType"),
-                        "productionLine": d.get("productionLine"),
-                        "healthScore": d.get("healthScore"),
-                    }
-                    for d in usable_devices
-                ],
-                ensure_ascii=False,
-            ),
-            800,
+    devices_payload = _truncate(
+        json.dumps(
+            [
+                {
+                    "id": d.get("id"),
+                    "deviceName": d.get("deviceName"),
+                    "deviceType": d.get("deviceType"),
+                    "productionLine": d.get("productionLine"),
+                    "healthScore": d.get("healthScore"),
+                }
+                for d in usable_devices
+            ],
+            ensure_ascii=False,
         ),
-        allocations=_truncate(
-            json.dumps(allocations, ensure_ascii=False), 1500
-        ),
+        800,
+    )
+    user_content = (
+        plan_template.replace(
+            "{orders}",
+            _truncate(json.dumps(sorted_orders, ensure_ascii=False), 1500),
+        )
+        .replace("{devices}", devices_payload)
+        .replace(
+            "{allocations}",
+            _truncate(json.dumps(allocations, ensure_ascii=False), 1500),
+        )
     )
 
     description = await llm_client.chat(
@@ -200,18 +208,6 @@ def _empty_plan(description: str, now_iso: str) -> dict:
         "status": "EMPTY",
         "created_at": now_iso,
     }
-
-
-_TRUNCATE_SUFFIX = "...(截断)"
-
-
-def _truncate(text: str, max_chars: int) -> str:
-    """截断文本以避免 prompt 过长，保证返回长度不超过 max_chars。"""
-    if len(text) <= max_chars:
-        return text
-    if max_chars <= len(_TRUNCATE_SUFFIX):
-        return text[:max_chars]
-    return text[: max_chars - len(_TRUNCATE_SUFFIX)] + _TRUNCATE_SUFFIX
 
 
 def _now_iso() -> str:

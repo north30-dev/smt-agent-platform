@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
-from agent_scheduler.device_client import DeviceServiceUnavailable
+from shared.device_client import DeviceServiceUnavailable
 from agent_scheduler.main import app
 from shared.llm_client import LLMClientError
 

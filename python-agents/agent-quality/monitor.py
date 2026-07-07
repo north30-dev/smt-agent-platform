@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from shared.config import settings
 
-from .device_client import device_client
+from shared.device_client import device_client
 
 from . import alert_store
 

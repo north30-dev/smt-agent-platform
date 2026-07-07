@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent_quality.device_client import DeviceServiceUnavailable
+from shared.device_client import DeviceServiceUnavailable
 from agent_quality.root_cause import COLLECTION, analyze, create_case
 
 

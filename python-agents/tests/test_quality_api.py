@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agent_quality import alert_store
-from agent_quality.device_client import DeviceServiceUnavailable
+from shared.device_client import DeviceServiceUnavailable
 from agent_quality.main import app
 from shared.llm_client import LLMClientError
 from shared.vector_store import VectorStoreError

@@ -6,11 +6,11 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 跨域配置（开发期允许所有来源），适用于 Servlet（spring-webmvc）应用。
+ * 跨域配置（开发期收敛到 localhost 白名单），适用于 Servlet（spring-webmvc）应用。
  *
- * <p>仅 dev profile 加载（P0-3 修复）：</p>
+ * <p>仅 dev profile 加载（P0-3 修复 + F2 收敛）：</p>
  * <ul>
- *   <li>dev：允许任意来源 + 携带凭据，便于本地前后端联调</li>
+ *   <li>dev：允许 localhost / 127.0.0.1 任意端口 + 携带凭据，覆盖 Vite(5173) 等本地前端</li>
  *   <li>prod：本类不加载，生产环境通过网关或配置中心下发白名单 origin 列表</li>
  * </ul>
  *
@@ -20,10 +20,17 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 
+    private static final String[] DEV_ALLOWED_ORIGIN_PATTERNS = {
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "https://localhost:*",
+        "https://127.0.0.1:*",
+    };
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOriginPatterns("*")
+                .allowedOriginPatterns(DEV_ALLOWED_ORIGIN_PATTERNS)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                 .allowedHeaders("*")
                 .allowCredentials(true)

@@ -142,11 +142,12 @@ async def test_scheduler_node_success(monkeypatch, base_state):
     }
     captured = {}
 
-    async def _fake_call_scheduler(order_no, product_model, quantity, delivery_date):
+    async def _fake_call_scheduler(order_no, product_model, quantity, delivery_date, source="user"):
         captured["order_no"] = order_no
         captured["product_model"] = product_model
         captured["quantity"] = quantity
         captured["delivery_date"] = delivery_date
+        captured["source"] = source
         return mock_result
 
     monkeypatch.setattr(
@@ -166,6 +167,8 @@ async def test_scheduler_node_success(monkeypatch, base_state):
 
     expected = (date.today() + timedelta(days=2)).isoformat()
     assert captured["delivery_date"] == expected
+    # 合成急单 source 应标记为 orchestrator_synthetic
+    assert captured["source"] == "orchestrator_synthetic"
 
 
 async def test_scheduler_node_unavailable(monkeypatch, base_state):

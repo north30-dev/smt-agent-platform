@@ -18,7 +18,7 @@ from shared.observability import (
 from shared.vector_store import VectorStoreError
 
 from . import order_store, planner, urgent
-from .device_client import DeviceServiceUnavailable
+from shared.device_client import DeviceServiceUnavailable
 from .models import (
     OrderCreateRequest,
     OrderListResponse,

@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agent_maintenance.device_client import DeviceServiceUnavailable
+from shared.device_client import DeviceServiceUnavailable
 from agent_maintenance.predict import (
     _build_alert,
     _build_recommendation,

@@ -11,7 +11,6 @@
 
 import json
 import math
-import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -19,6 +18,7 @@ import yaml
 
 from shared import llm_client
 from shared.config import settings
+from shared.text_utils import extract_json_block as _extract_json_block, truncate as _truncate
 
 from . import order_store
 
@@ -30,7 +30,7 @@ async def handle_urgent(req) -> dict:
     """处理急单插单请求。
 
     Args:
-        req: UrgentRequest 实例（含 order_no/product_model/quantity/delivery_date）。
+        req: UrgentRequest 实例（含 order_no/product_model/quantity/delivery_date/source）。
 
     Returns:
         匹配 UrgentResponse 字段的 dict。
@@ -44,6 +44,7 @@ async def handle_urgent(req) -> dict:
         priority="URGENT",
         delivery_date=req.delivery_date,
         material_ready=True,
+        source=req.source,
     )
 
     # 2. 比对当前 ACTIVE 计划
@@ -217,36 +218,3 @@ def _build_adjustment(data) -> dict:
         "changeover_suggestion": changeover or "（LLM 未给出换线建议）",
         "overtime_suggestion": overtime or "（LLM 未给出加班建议）",
     }
-
-
-def _extract_json_block(text: str) -> str | None:
-    """从 markdown 代码块或裸 JSON 中提取 JSON 文本。
-
-    参考 agent-maintenance/diagnose.py 的同名函数。
-    """
-    pattern = r"```(?:json|JSON)?\s*\n(.*?)\n\s*```"
-    matches = re.findall(pattern, text, re.DOTALL)
-    if matches:
-        for candidate in reversed(matches):
-            stripped = candidate.strip()
-            if stripped.startswith("{") or stripped.startswith("["):
-                return stripped
-    obj_match = re.search(r"\{.*\}", text, re.DOTALL)
-    if obj_match:
-        return obj_match.group(0)
-    arr_match = re.search(r"\[.*\]", text, re.DOTALL)
-    if arr_match:
-        return arr_match.group(0)
-    return None
-
-
-_TRUNCATE_SUFFIX = "...(截断)"
-
-
-def _truncate(text: str, max_chars: int) -> str:
-    """截断文本以避免 prompt 过长，保证返回长度不超过 max_chars。"""
-    if len(text) <= max_chars:
-        return text
-    if max_chars <= len(_TRUNCATE_SUFFIX):
-        return text[:max_chars]
-    return text[: max_chars - len(_TRUNCATE_SUFFIX)] + _TRUNCATE_SUFFIX

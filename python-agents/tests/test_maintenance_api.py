@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
-from agent_maintenance.device_client import DeviceServiceUnavailable
+from shared.device_client import DeviceServiceUnavailable
 from agent_maintenance.main import app
 from shared.llm_client import LLMClientError
 
