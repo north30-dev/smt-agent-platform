@@ -78,6 +78,10 @@ class Settings(BaseSettings):
     agent_quality_base_url: str = "http://localhost:8003"
     agent_scheduler_base_url: str = "http://localhost:8001"
 
+    # Phase 1 m：运维风险阈值
+    maintenance_risk_low: int = 85
+    maintenance_risk_medium: int = 60
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

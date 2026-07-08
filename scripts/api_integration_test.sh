@@ -1,9 +1,10 @@
 #!/bin/bash
-
 # ========================================
 # SMT Agent Platform API集成测试脚本
 # 端口与地址配置见 scripts/config.sh
 # ========================================
+# 注意：本脚本统计 pass/fail，必须逐个跑完所有用例，故不启用 set -e
+set -uo pipefail
 
 # 设置 PROJECT_ROOT 以便 config.sh 加载 .env
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -179,6 +180,7 @@ test_api "Orchestrator健康检查" \
     "healthy"
 
 # 12. 完整编排链路测试
+echo ""
 echo "[12] 设备故障协同编排测试"
 curl -s -X POST "$ORCHESTRATOR_BASE/v1/orchestrator/device_fault" \
   -H 'Content-Type: application/json' \

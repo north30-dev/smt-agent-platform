@@ -114,7 +114,7 @@ services:
       TZ: Asia/Shanghai
     healthcheck:
       # 通过订阅 $SYS 主题验证 broker 已就绪；-W 3 限定 3 秒超时，避免 healthcheck 长时间挂起
-      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -t '$$SYS/#' -C 1 -W 3 >/dev/null 2>&1 || exit 0"]
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -t '$$SYS/#' -C 1 -W 3 >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

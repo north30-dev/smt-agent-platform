@@ -16,11 +16,23 @@ client = TestClient(orchestrator_main.app, raise_server_exceptions=False)
 
 
 @pytest.fixture(autouse=True)
-def _reset_workflows():
-    """每个测试前清空内存工作流存储，避免相互污染（autouse，无需显式引用）。"""
-    orchestrator_main._workflows.clear()
-    yield
-    orchestrator_main._workflows.clear()
+def workflow_store(monkeypatch):
+    """用内存 dict 替换 shared.db 的工作流持久化，避免触达真实 PG（autouse）。
+
+    REL-1 迁移后 orchestrator 通过 shared.db.save_workflow/get_workflow 持久化，
+    测试需 mock 这两个模块级符号；返回 store 供断言使用。
+    """
+    store: dict[str, dict] = {}
+
+    async def _fake_save(workflow_id: str, status: str, data: dict) -> None:
+        store[workflow_id] = {"workflow_id": workflow_id, "status": status, **data}
+
+    async def _fake_get(workflow_id: str):
+        return store.get(workflow_id)
+
+    monkeypatch.setattr(orchestrator_main, "save_workflow", _fake_save)
+    monkeypatch.setattr(orchestrator_main, "_get_workflow", _fake_get)
+    yield store
 
 
 def _patch_graph_success(monkeypatch, summary_text="LLM 摘要"):
@@ -150,8 +162,8 @@ def test_device_fault_empty_symptom_returns_422():
     assert response.status_code == 422
 
 
-def test_device_fault_persists_workflow(monkeypatch):
-    """POST 后应将工作流存入 _workflows，可供 GET 查询。"""
+def test_device_fault_persists_workflow(monkeypatch, workflow_store):
+    """POST 后应通过 save_workflow 持久化，可供 GET 查询。"""
     _patch_graph_success(monkeypatch)
 
     response = client.post(
@@ -160,8 +172,8 @@ def test_device_fault_persists_workflow(monkeypatch):
     )
 
     workflow_id = response.json()["workflow_id"]
-    assert workflow_id in orchestrator_main._workflows
-    assert orchestrator_main._workflows[workflow_id]["status"] == "SUCCESS"
+    assert workflow_id in workflow_store
+    assert workflow_store[workflow_id]["status"] == "SUCCESS"
 
 
 # ---------------------------------------------------------------------------
@@ -236,19 +248,23 @@ def test_device_fault_workflow_id_uniqueness(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# _store_workflow 容量上限
+# 多工作流持久化（REL-1 迁移后无内存上限）
 # ---------------------------------------------------------------------------
 
 
-def test_workflows_store_caps_at_100(monkeypatch):
-    """超过 100 条应丢弃最旧的。"""
+def test_multiple_workflows_persist(monkeypatch, workflow_store):
+    """101 条工作流均可正常存储（验证 PG 迁移后无内存上限副作用）。"""
     _patch_graph_success(monkeypatch)
 
-    # 写入 101 条
+    ids = []
     for i in range(101):
-        client.post(
+        r = client.post(
             "/v1/orchestrator/device_fault",
             json={"device_id": i + 1, "symptom": f"s{i}"},
         )
+        ids.append(r.json()["workflow_id"])
 
-    assert len(orchestrator_main._workflows) == 100
+    assert len(workflow_store) == 101
+    for wid in (ids[0], ids[50], ids[100]):
+        assert wid in workflow_store
+        assert workflow_store[wid]["status"] == "SUCCESS"

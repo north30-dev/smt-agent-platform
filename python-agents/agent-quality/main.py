@@ -4,7 +4,9 @@
 对外路径前缀 /v1/quality/**（经 smt-gateway StripPrefix=2 后落地本服务）。
 """
 
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 
 from shared.config import settings
@@ -26,10 +28,30 @@ from .models import (
     RootCauseResponse,
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：shutdown 时关闭共享 httpx 客户端（RES-1）。"""
+    yield
+    try:
+        from shared.llm_client import aclose as _aclose_llm
+
+        await _aclose_llm()
+    except Exception as exc:
+        logger.warning("shutdown: close llm_client failed", error=str(exc))
+    try:
+        from shared.device_client import aclose as _aclose_device
+
+        await _aclose_device()
+    except Exception as exc:
+        logger.warning("shutdown: close device_client failed", error=str(exc))
+
+
 app = FastAPI(
     title="SMT 质量分析 Agent",
     description="SMT 产线质量监控与根因分析服务。",
     version="0.3.0",
+    lifespan=lifespan,
 )
 
 setup_logging(settings.log_level)
@@ -64,7 +86,10 @@ async def create_case(req: CaseCreateRequest):
 
 
 @app.get("/v1/quality/alerts", response_model=AlertsPageResponse)
-async def list_alerts(page: int = 1, size: int | None = None):
+async def list_alerts(
+    page: int = Query(1, ge=1, description="页码，从 1 开始"),
+    size: int | None = Query(None, ge=1, le=200, description="每页条数，1-200"),
+):
     """分页查询质量告警记录。"""
     result = await alert_store.list_alerts(page, size)
     return AlertsPageResponse(**result)

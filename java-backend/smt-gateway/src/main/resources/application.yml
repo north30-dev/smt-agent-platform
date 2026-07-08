@@ -18,42 +18,42 @@ spring:
           predicates:
             - Path=/api/device/**
         # Phase 2 新增：Python Agent 路由
-        # /api/agent/knowledge/** → agent-knowledge（8004），StripPrefix=2 剥离 /api/agent，Python 收到 /knowledge/**
+        # /api/agent/v1/knowledge/** → agent-knowledge（8004），StripPrefix=2 剥离 /api/agent，转发 /v1/knowledge/**
         - id: agent-knowledge
           uri: http://${SMT_AGENT_KNOWLEDGE_HOST:localhost}:${SMT_AGENT_KNOWLEDGE_PORT:8004}
           predicates:
-            - Path=/api/agent/knowledge/**
+            - Path=/api/agent/v1/knowledge/**
           filters:
             - StripPrefix=2
-        # /api/agent/maintenance/** → agent-maintenance（8002），StripPrefix=2 剥离 /api/agent，Python 收到 /maintenance/**
+        # /api/agent/v1/maintenance/** → agent-maintenance（8002），StripPrefix=2 剥离 /api/agent，转发 /v1/maintenance/**
         - id: agent-maintenance
           uri: http://${SMT_AGENT_MAINTENANCE_HOST:localhost}:${SMT_AGENT_MAINTENANCE_PORT:8002}
           predicates:
-            - Path=/api/agent/maintenance/**
+            - Path=/api/agent/v1/maintenance/**
           filters:
             - StripPrefix=2
         # Phase 3 新增：质量分析 Agent 路由
-        # /api/agent/quality/** → agent-quality（8003），StripPrefix=2 剥离 /api/agent，Python 收到 /quality/**
+        # /api/agent/v1/quality/** → agent-quality（8003），StripPrefix=2 剥离 /api/agent，转发 /v1/quality/**
         - id: agent-quality
           uri: http://${SMT_AGENT_QUALITY_HOST:localhost}:${SMT_AGENT_QUALITY_PORT:8003}
           predicates:
-            - Path=/api/agent/quality/**
+            - Path=/api/agent/v1/quality/**
           filters:
             - StripPrefix=2
         # Phase 3 新增：调度智能体路由
-        # /api/agent/scheduler/** → agent-scheduler（8001），StripPrefix=2 剥离 /api/agent，Python 收到 /scheduler/**
+        # /api/agent/v1/scheduler/** → agent-scheduler（8001），StripPrefix=2 剥离 /api/agent，转发 /v1/scheduler/**
         - id: agent-scheduler
           uri: http://${SMT_AGENT_SCHEDULER_HOST:localhost}:${SMT_AGENT_SCHEDULER_PORT:8001}
           predicates:
-            - Path=/api/agent/scheduler/**
+            - Path=/api/agent/v1/scheduler/**
           filters:
             - StripPrefix=2
         # Phase 3 新增：Agent 编排服务路由
-        # /api/agent/orchestrator/** → agent-orchestrator（8005），StripPrefix=2 剥离 /api/agent，Python 收到 /orchestrator/**
+        # /api/agent/v1/orchestrator/** → agent-orchestrator（8005），StripPrefix=2 剥离 /api/agent，转发 /v1/orchestrator/**
         - id: agent-orchestrator
           uri: http://${SMT_AGENT_ORCHESTRATOR_HOST:localhost}:${SMT_AGENT_ORCHESTRATOR_PORT:8005}
           predicates:
-            - Path=/api/agent/orchestrator/**
+            - Path=/api/agent/v1/orchestrator/**
           filters:
             - StripPrefix=2
 
@@ -64,6 +64,6 @@ spring:
 smt:
   security:
     jwt:
-      secret: ${SMT_JWT_SECRET:dev-only-please-change-me-in-production-32bytes}
+      secret: ${SMT_JWT_SECRET:dev-only-jwt-secret-key-please-change-in-production-32bytes-min}
       header: Authorization
       prefix: "Bearer "

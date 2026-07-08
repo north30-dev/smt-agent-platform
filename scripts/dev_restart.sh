@@ -4,7 +4,7 @@
 # 全新环境冷启动请用：bash scripts/start_all.sh
 # 用法: bash scripts/dev_restart.sh
 
-set -e
+set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"

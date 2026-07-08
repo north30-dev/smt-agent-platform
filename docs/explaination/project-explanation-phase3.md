@@ -19,7 +19,7 @@
 
 **当前进度一句话**：Phase 3（质量分析 Agent + 调度 Agent + LangGraph 多 Agent 编排）代码层面全量交付完成，Python 176 测试 + Java 57 测试全绿（覆盖率 77.28%），6 份 Phase 3 专项审查报告已生成；智能体层从 Phase 2 的 2/5 升级到 5/5（仅缺执行协同 Agent，属 Phase 4）；待用户确认后提交并合并 `main`。
 
-**已交付**：`python-agents/agent-quality/`（端口 8003，4 接口，AOI 缺陷率监控 + 五要素根因分析 + 案例入库 + 告警查询）、`python-agents/agent-scheduler/`（端口 8001，5 接口，订单录入 + 智能排产 + 急单插单响应 + 计划查询）、`python-agents/agent-orchestrator/`（端口 8005，2 接口，LangGraph `StateGraph` 编排 maintenance→quality→scheduler→summary 线性图 + 子 Agent 降级 skipped）、`python-agents/shared/` 扩展（`db_schema.sql` 三张表 DDL 集中管理 + `vector_store.COLLECTIONS` 追加 `smt_quality_cases` + `config.py` 追加 `quality_*` / `scheduler_*` / `agent_*_base_url` 配置 + `prompts/system_prompt.yaml` 追加 quality / scheduler 两套中文 prompt）、`smt-gateway` 新增 3 条路由（`/api/agent/quality/**` / `/api/agent/scheduler/**` / `/api/agent/orchestrator/**`，均 StripPrefix=2，环境变量化，JWT 鉴权继承既有 AgentAuthWebFilter）、`api-contracts/openapi/agent_api.yaml` 追加 11 个新接口定义（quality 4 + scheduler 5 + orchestrator 2）、`scripts/dev_restart.sh` 追加 8001/8003/8005 启动命令、`python-agents/README.md` 端口映射表覆盖 5 个 Agent。
+**已交付**：`python-agents/agent-quality/`（端口 8003，4 接口，AOI 缺陷率监控 + 五要素根因分析 + 案例入库 + 告警查询）、`python-agents/agent-scheduler/`（端口 8001，5 接口，订单录入 + 智能排产 + 急单插单响应 + 计划查询）、`python-agents/agent-orchestrator/`（端口 8005，2 接口，LangGraph `StateGraph` 编排 maintenance→quality→scheduler→summary 线性图 + 子 Agent 降级 skipped）、`python-agents/shared/` 扩展（`db_schema.sql` 三张表 DDL 集中管理 + `vector_store.COLLECTIONS` 追加 `smt_quality_cases` + `config.py` 追加 `quality_*` / `scheduler_*` / `agent_*_base_url` 配置 + `prompts/system_prompt.yaml` 追加 quality / scheduler 两套中文 prompt）、`smt-gateway` 新增 3 条路由（`/api/agent/v1/quality/**` / `/api/agent/v1/scheduler/**` / `/api/agent/v1/orchestrator/**`，均 StripPrefix=2 剥离 `/api/agent` 后转发 `/v1/<module>/**`，环境变量化，JWT 鉴权继承既有 AgentAuthWebFilter）、`api-contracts/openapi/agent_api.yaml` 追加 11 个新接口定义（quality 4 + scheduler 5 + orchestrator 2）、`scripts/dev_restart.sh` 追加 8001/8003/8005 启动命令、`python-agents/README.md` 端口映射表覆盖 5 个 Agent。
 
 **未交付**（属后续阶段）：执行协同 Agent（Phase 4）；Kafka 事件总线（Phase 4）；gRPC 跨语言契约（Phase 4+）；Java `smt-order-service` / `smt-quality-service` / `smt-agent-router` 业务实现（Phase 4+）；前端可视化（QualityMonitor / SchedulerDashboard / Orchestrator 页面，Phase 4）；C++ 原生层（Phase 5）；PHM 深度学习模型 + 14 天预警（Phase 5+）；P1 功能（产能预警、换线优化、调度模拟、工艺参数优化、缺陷预测、质量追溯）；流式 SSE 输出、独立 reranker 模型、AutoGen 编排（spec 明确排除）。
 
@@ -85,14 +85,14 @@
 | 23 | `agent_clients.py` httpx.AsyncClient 封装对 maintenance/quality/scheduler 的 HTTP 调用，不可达时抛 `AgentUnavailable` | ✅ | |
 | 24 | `nodes.py` 定义 `maintenance_node` / `quality_node` / `scheduler_node` / `summary_node` 四节点，子 Agent 不可达时降级（写入 `state.errors`，不阻断整体流程） | ✅ | |
 | 25 | `graph.py` 用 `langgraph.graph.StateGraph` 构建 `START → maintenance → quality → scheduler → summary → END` 顺序图并编译 | ✅ | langgraph 1.2.7 API |
-| 26 | `main.py` FastAPI 2 接口 + /v1/ 前缀 + async + /healthz + 异常处理器 + 内存工作流存储（上限 100） | ✅ | |
+| 26 | `main.py` FastAPI 2 接口 + /v1/ 前缀 + async + /healthz + `lifespan` + 异常处理器 + PG 工作流持久化（修复批次迁移） | ✅ | |
 | 27 | `tests/test_orchestrator_nodes.py`(16) + `test_orchestrator_graph.py`(7) + `test_orchestrator_api.py`(12) 全绿 | ✅ | 共 35 用例 |
 
 #### 2.2.5 Java 网关路由 + API 契约 + 脚本文档 + 测试验证
 
 | # | 交付项 | 状态 | 备注 |
 |---|---|---|---|
-| 28 | `smt-gateway/application.yml` 新增 3 条路由（quality→8003 / scheduler→8001 / orchestrator→8005，StripPrefix=2，环境变量化） | ✅ | 既有 knowledge/maintenance 路由未修改 |
+| 28 | `smt-gateway/application.yml` 新增 3 条路由（`/api/agent/v1/{quality,scheduler,orchestrator}/**`，StripPrefix=2，环境变量化） | ✅ | 修复批次中 knowledge/maintenance 既有路由同步加 `/v1` 外部路径，StripPrefix 保持 2 |
 | 29 | `mvn -pl smt-gateway compile` 通过 | ✅ | |
 | 30 | `api-contracts/openapi/agent_api.yaml` 追加 11 接口（quality 4 + scheduler 5 + orchestrator 2），含请求/响应 schema，新增 tags：`质量分析` / `调度智能体` / `Agent 编排` | ✅ | 19 operations / 40 schemas / 5 tags |
 | 31 | `scripts/build_all.sh` Python 段保持 `uv sync` | ✅ | |
@@ -138,7 +138,7 @@ PRD §3.1 设计了"交互层 / 智能体层 / 服务层 / 数据层"四层架�
 | 交互层（Frontend） | Web 控制台、移动端、数字孪生大屏 | ❌ 仅占位目录，无实现（属 Phase 4） |
 | 智能体层（Agent） | 5 个 Python Agent | 🟢 **5/5 已实现**：knowledge(8004) + maintenance(8002) + quality(8003) + scheduler(8001) + orchestrator(8005 LangGraph 编排)；仅缺 execution Agent（Phase 4） |
 | 服务层（Service） | Java 微服务群 + 消息队列 | 🟡 Phase 1/2 既有复用 + gateway 新增 3 条路由；缺 order/quality/notification/agent-router Java 模块（Phase 4+） |
-| 数据层（Data） | PG + InfluxDB + Milvus + 工业协议 | 🟡 Phase 2 既有；Phase 3 新增 3 张 PG 表（`quality_alerts` / `production_orders` / `production_plans`）+ Milvus collection `smt_quality_cases`；无新中间件 |
+| 数据层（Data） | PG + InfluxDB + Milvus + 工业协议 | 🟡 Phase 2 既有；Phase 3 新增 3 张 PG 表（`quality_alerts` / `production_orders` / `production_plans`）+ Milvus collection `smt_quality_cases`；修复批次新增 `workflows` 表（orchestrator 工作流持久化）；无新中间件 |
 
 ### 3.2 模块划分（当前实现）
 
@@ -159,7 +159,7 @@ graph TB
         AQ["agent-quality<br/>:8003 /v1/ 质量监控"]
         AS["agent-scheduler<br/>:8001 /v1/ 智能排产"]
         AK["agent-knowledge<br/>:8004 /v1/ RAG 问答"]
-        Shared["shared/<br/>llm_client + vector_store<br/>+ db_schema + config<br/>+ prompts + observability"]
+        Shared["shared/<br/>llm_client + vector_store<br/>+ db_schema + config<br/>+ prompts + observability<br/>+ db.py (PG 连接池)"]
     end
 
     subgraph ServiceLayer["服务层 (Java)"]
@@ -179,8 +179,8 @@ graph TB
         LLM["通义千问 / DeepSeek<br/>OpenAI 兼容接口"]
     end
 
-    Client -->|"HTTP /api/agent/orchestrator/**"| GW
-    Client -->|"HTTP /api/agent/{quality,scheduler,maintenance,knowledge}/**"| GW
+    Client -->|"HTTP /api/agent/v1/orchestrator/**"| GW
+    Client -->|"HTTP /api/agent/v1/{quality,scheduler,maintenance,knowledge}/**"| GW
     Client -->|"HTTP /api/device/**"| GW
     GW --> AuthFilter
     AuthFilter -->|"StripPrefix=2 → /v1/orchestrator/**"| AO
@@ -265,7 +265,7 @@ sequenceDiagram
     participant AS as agent-scheduler:8001
     participant LLM as 大模型服务
 
-    FE->>GW: POST /api/agent/orchestrator/device_fault<br/>Authorization: Bearer {token}<br/>body: {device_id, symptom}
+    FE->>GW: POST /api/agent/v1/orchestrator/device_fault<br/>Authorization: Bearer {token}<br/>body: {device_id, symptom}
     GW->>GW: AgentAuthWebFilter 校验 token
     GW->>AO: StripPrefix=2 → POST /v1/orchestrator/device_fault
     AO->>AO: app_graph.ainvoke(initial_state)
@@ -292,6 +292,7 @@ sequenceDiagram
     AO->>LLM: llm_client.achat(汇总 prompt)
     LLM-->>AO: summary 文本
     Note over AO: state.summary = result<br/>_determine_status → SUCCESS/PARTIAL/FAILED
+    AO->>AO: shared.db.save_workflow(workflow_id, status, result)<br/>[PG workflows 表 UPSERT]
     AO-->>GW: 200 {workflow_id, status, diagnosis, quality_assessment, schedule_adjustment, summary, errors}
     GW-->>FE: 透传响应
 ```
@@ -309,7 +310,7 @@ sequenceDiagram
     participant LLM as 大模型服务
     participant Mil as Milvus:19530
 
-    FE->>GW: POST /api/agent/quality/root_cause<br/>body: {device_id, defect_description}
+    FE->>GW: POST /api/agent/v1/quality/root_cause<br/>body: {device_id, defect_description}
     GW->>AQ: StripPrefix=2 → POST /v1/quality/root_cause
     AQ->>DS: GET /api/device/{device_id} (AsyncClient + tenacity)
     DS-->>AQ: {deviceCode, deviceName, deviceType, status, healthScore}
@@ -336,7 +337,7 @@ sequenceDiagram
     participant PG as PostgreSQL
     participant LLM as 大模型服务
 
-    FE->>GW: POST /api/agent/scheduler/plan/generate
+    FE->>GW: POST /api/agent/v1/scheduler/plan/generate
     GW->>AS: StripPrefix=2 → POST /v1/scheduler/plan/generate
     AS->>PG: order_store.list_orders(status=None)
     PG-->>AS: 全部订单（含 PENDING/PLANNED）
@@ -362,7 +363,7 @@ sequenceDiagram
     participant PG as PostgreSQL
     participant LLM as 大模型服务
 
-    FE->>GW: POST /api/agent/scheduler/urgent<br/>body: {order_no, product_model, quantity, delivery_date}
+    FE->>GW: POST /api/agent/v1/scheduler/urgent<br/>body: {order_no, product_model, quantity, delivery_date}
     GW->>AS: StripPrefix=2 → POST /v1/scheduler/urgent
     AS->>PG: order_store.save_order(急单, priority=URGENT)
     PG-->>AS: order_id
@@ -396,7 +397,7 @@ sequenceDiagram
 | `main.py` | FastAPI 入口 + /v1/ 前缀 + async + /healthz + 5 类异常处理器 | [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-quality/main.py) |
 | `monitor.py` | `async def monitor(device_id) -> dict`：拉取 AOI 数据点 → 计算不良率 → 阈值判定 → 超阈值落库 `quality_alerts` → 数据不足返回 `INSUFFICIENT_DATA` | [`monitor.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-quality/monitor.py) |
 | `root_cause.py` | `async def analyze(device_id, defect_description) -> dict` + `async def create_case(...) -> str`：retrieve(smt_quality_cases) → LLM 根因推理 → 五要素分类 → JSON 代码块三级降级解析 | [`root_cause.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-quality/root_cause.py) |
-| `alert_store.py` | `async def save_alert(...) -> int` + `async def list_alerts(page, size) -> dict`：asyncpg 连接池 + `quality_alerts` 表 CRUD | [`alert_store.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-quality/alert_store.py) |
+| `alert_store.py` | `async def save_alert(...) -> int` + `async def list_alerts(page, size) -> dict`：asyncpg 连接池 + `quality_alerts` 表 CRUD（连接池通过 `shared/db.py` 的 `get_pg_pool()` 统一获取，消除独立 `_pool` 竞态） | [`alert_store.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-quality/alert_store.py) |
 | `device_client.py` | Java device-service AsyncClient（DI 模式 + tenacity）+ `DeviceServiceUnavailable` 异常 | [`device_client.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-quality/device_client.py) |
 | `models.py` | Pydantic 模型（MonitorResponse / RootCauseRequest/Response / CaseCreateRequest/Response / AlertsPageResponse / AlertRecord） | [`models.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-quality/models.py) |
 
@@ -430,7 +431,7 @@ sequenceDiagram
 | `main.py` | FastAPI 入口 + /v1/ 前缀 + async + /healthz + 5 类异常处理器 | [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-scheduler/main.py) |
 | `planner.py` | `async def generate_plan() -> dict`：list_orders(PENDING+material_ready) → list_devices(status=RUNNING+healthScore≥85) → 排序（URGENT→delivery_date→quantity）→ _round_robin_allocate → LLM ≤200 字说明 → save_plan + update_order_status(PLANNED) | [`planner.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-scheduler/planner.py) |
 | `urgent.py` | `async def handle_urgent(req) -> dict`：save_order(URGENT) → get_current_plan → 比对受影响订单 → 计算延迟时长 → LLM 换线/加班建议 | [`urgent.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-scheduler/urgent.py) |
-| `order_store.py` | asyncpg 连接池，提供 `save_order` / `list_orders` / `save_plan` / `get_current_plan` / `update_order_status` / `get_next_plan_version` | [`order_store.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-scheduler/order_store.py) |
+| `order_store.py` | asyncpg 连接池，提供 `save_order` / `list_orders` / `save_plan` / `get_current_plan` / `update_order_status` / `get_next_plan_version`（连接池通过 `shared/db.py` 的 `get_pg_pool()` 统一获取，消除独立 `_pool` 竞态） | [`order_store.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-scheduler/order_store.py) |
 | `device_client.py` | Java device-service AsyncClient + `DeviceServiceUnavailable` 异常 | [`device_client.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-scheduler/device_client.py) |
 | `models.py` | Pydantic 模型（OrderCreateRequest/Response、PlanGenerateRequest/Response、UrgentRequest/Response、OrderListResponse） | [`models.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-scheduler/models.py) |
 
@@ -460,7 +461,7 @@ sequenceDiagram
 
 | 模块 | 职责 | 文件 |
 |---|---|---|
-| `main.py` | FastAPI 入口 + /v1/ 前缀 + async + /healthz + 异常处理器 + 内存工作流存储（`_workflows` dict，上限 100，超出丢弃最旧）+ `_determine_status` 状态判定（SUCCESS/PARTIAL/FAILED） | [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/main.py) |
+| `main.py` | FastAPI 入口 + /v1/ 前缀 + async + /healthz + `lifespan` 上下文管理器（startup 初始化 `workflows` 表，shutdown 关闭共享 httpx 客户端与 PG 连接池，RES-1）+ 异常处理器 + 工作流持久化（修复批次中从内存 `_workflows` dict 迁移到 PostgreSQL `workflows` 表，通过 `shared/db.py` 的 `save_workflow` / `get_workflow` 实现，重启不丢失）+ `_determine_status` 状态判定（SUCCESS/PARTIAL/FAILED） | [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/main.py) |
 | `graph.py` | `def build_graph()`：用 `langgraph.graph.StateGraph` 构建 `START → maintenance → quality → scheduler → summary → END` 顺序图并编译为 `app_graph` | [`graph.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/graph.py) |
 | `nodes.py` | 4 个节点函数：`maintenance_node` / `quality_node` / `scheduler_node` / `summary_node`；子 Agent 不可达时降级（写入 `state.errors`，对应字段标记 `skipped`，不阻断整体流程） | [`nodes.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/nodes.py) |
 | `state.py` | `class OrchestratorState(TypedDict)`：`device_id` / `symptom` / `diagnosis` / `quality_assessment` / `schedule_adjustment` / `summary` / `errors` | [`state.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/state.py) |
@@ -472,7 +473,8 @@ sequenceDiagram
 - LangGraph `StateGraph` 线性编排（顺序图，非并行）
 - 子 Agent 不可达降级：标记 `skipped`，工作流继续执行
 - 工作流状态判定：3 节点全成功 → SUCCESS；至少 1 成功 → PARTIAL；全失败 → FAILED
-- 内存工作流存储（`_workflows` dict，上限 100，超出丢弃最旧）
+- 工作流持久化（修复批次中从内存 `_workflows` dict 迁移到 PostgreSQL `workflows` 表，通过 `shared/db.py` 的 `save_workflow` / `get_workflow` 实现，进程重启不丢失；原 `_workflows` / `_MAX_WORKFLOWS` / `_store_workflow` 已移除）
+- `lifespan` 上下文管理器管理 startup/shutdown 生命周期（RES-1）
 - LLM 汇总摘要：summary_node 调用 `llm_client.achat` 生成自然语言汇总
 - `workflow_id` 生成规则：`wf-{uuid4_hex[:12]}`
 - Agent 不可达兜底 → 503；LLM 不可达兜底 → 503；参数错误 → 400
@@ -487,16 +489,17 @@ sequenceDiagram
 | `db_schema.sql` | **新增文件**，集中管理 `quality_alerts` / `production_orders` / `production_plans` 三张表 DDL | [`db_schema.sql`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db_schema.sql) |
 | `config.py` | 追加 13 项配置：`quality_aoi_defect_rate_threshold` / `quality_spi_solder_paste_volume_min/max` / `quality_monitor_window_hours` / `quality_alerts_page_size` / `scheduler_max_horizon_hours` / `scheduler_changeover_minutes` / `scheduler_device_min_health_score` / `scheduler_capacity_per_hour` / `agent_maintenance_base_url` / `agent_quality_base_url` / `agent_scheduler_base_url` | [`config.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/config.py) |
 | `prompts/system_prompt.yaml` | 追加 quality + scheduler 两套中文角色 prompt | [`system_prompt.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/prompts/system_prompt.yaml) |
+| `db.py` | **修复批次新增**：PostgreSQL 连接池公共模块（`get_pg_pool()` 双重检查 + asyncio.Lock 懒初始化），消除 doc_meta_store / order_store / alert_store 三处独立 `global _pool` TOCTOU 竞态；同时承载 orchestrator 工作流持久化（`init_workflow_table` / `save_workflow` / `get_workflow` / `close_pool`） | [`db.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db.py) |
 
 ### 4.5 Java 网关路由扩展
 
 | 路径 | 目标服务 | 鉴权 | 文件 |
 |---|---|---|---|
-| `/api/agent/quality/**` | `localhost:8003`（StripPrefix=2） | JWT（继承 AgentAuthWebFilter） | [`application.yml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-gateway/src/main/resources/application.yml) |
-| `/api/agent/scheduler/**` | `localhost:8001`（StripPrefix=2） | JWT | 同上 |
-| `/api/agent/orchestrator/**` | `localhost:8005`（StripPrefix=2） | JWT | 同上 |
+| `/api/agent/v1/quality/**` | `localhost:8003`（StripPrefix=2 → `/v1/quality/**`） | JWT（继承 AgentAuthWebFilter） | [`application.yml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-gateway/src/main/resources/application.yml) |
+| `/api/agent/v1/scheduler/**` | `localhost:8001`（StripPrefix=2 → `/v1/scheduler/**`） | JWT | 同上 |
+| `/api/agent/v1/orchestrator/**` | `localhost:8005`（StripPrefix=2 → `/v1/orchestrator/**`） | JWT | 同上 |
 
-环境变量化：`SMT_AGENT_QUALITY_HOST/PORT`、`SMT_AGENT_SCHEDULER_HOST/PORT`、`SMT_AGENT_ORCHESTRATOR_HOST/PORT`。既有 knowledge/maintenance 路由未修改。
+环境变量化：`SMT_AGENT_QUALITY_HOST/PORT`、`SMT_AGENT_SCHEDULER_HOST/PORT`、`SMT_AGENT_ORCHESTRATOR_HOST/PORT`。修复批次中 knowledge/maintenance 既有路由同步调整为 `/api/agent/v1/<module>/**` 外部路径，StripPrefix 保持 2 不变（剥离 `/api/agent` 后转发 `/v1/<module>/**`，与 Python 端 `/v1/` 前缀对齐）。
 
 ### 4.6 API 契约扩展
 
@@ -516,7 +519,7 @@ sequenceDiagram
 | `test_scheduler_api.py` | 14 | — | 5 接口 + 边界 |
 | `test_orchestrator_nodes.py` | 16 | — | 4 节点 + 降级分支 + State 传递 |
 | `test_orchestrator_graph.py` | 7 | — | LangGraph 节点顺序 + 状态判定 |
-| `test_orchestrator_api.py` | 12 | — | 2 接口 + 工作流存储 + 状态判定 |
+| `test_orchestrator_api.py` | 12 | — | 2 接口 + 工作流存储 + 状态判定（工作流存储已迁移到 PG，测试通过 `workflow_store` fixture monkeypatch `shared.db.save_workflow` / `get_workflow` 替代已移除的 `_workflows` dict；原 `test_workflows_store_caps_at_100` 重命名为 `test_multiple_workflows_persist`，101 条工作流全部持久化、不再有上限） |
 | **Phase 3 新增小计** | **99** | | **全绿** |
 | Phase 2 既有 | 77 | — | 详见 Phase 2 报告 |
 | **Python 总计** | **176 passed + 2 skipped** | | **覆盖率 77.28%** |
@@ -537,7 +540,7 @@ sequenceDiagram
 ```mermaid
 graph BT
     subgraph PythonLayer["python-agents/"]
-        Shared["shared/<br/>llm_client + vector_store<br/>+ db_schema + config<br/>+ prompts + observability + models"]
+        Shared["shared/<br/>llm_client + vector_store<br/>+ db_schema + config<br/>+ prompts + observability + models<br/>+ db.py (PG 连接池 + 工作流持久化)"]
         AK["agent-knowledge<br/>端口 8004 (Phase 2)"]
         AM["agent-maintenance<br/>端口 8002 (Phase 2)"]
         AQ["agent-quality<br/>端口 8003 (Phase 3)"]
@@ -603,6 +606,7 @@ python-agents/
 │   ├── [config.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/config.py)                       Settings 单例（Phase 3 追加 13 项配置）
 │   ├── [vector_store.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/vector_store.py)                 Milvus CRUD（COLLECTIONS 追加 smt_quality_cases）
 │   ├── [db_schema.sql](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db_schema.sql)                  **新增**：quality_alerts / production_orders / production_plans 三表 DDL
+│   ├── [db.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db.py)                  **修复批次新增**：PG 连接池公共模块 + orchestrator 工作流持久化（save_workflow / get_workflow）
 │   └── [prompts/system_prompt.yaml](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/prompts/system_prompt.yaml)   追加 quality + scheduler 两套中文 prompt
 ├── agent-quality/                      质量分析（端口 8003，Phase 3 新增）
 │   ├── [__init__.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-quality/__init__.py)
@@ -622,7 +626,7 @@ python-agents/
 │   └── [models.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-scheduler/models.py)                     Pydantic 模型
 ├── agent-orchestrator/                 LangGraph 编排（端口 8005，Phase 3 新增）
 │   ├── [__init__.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/__init__.py)
-│   ├── [main.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/main.py)                       FastAPI 2 接口 + /v1/ + async + /healthz + 内存工作流存储
+│   ├── [main.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/main.py)                       FastAPI 2 接口 + /v1/ + async + /healthz + lifespan + PG 工作流持久化
 │   ├── [graph.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/graph.py)                    LangGraph StateGraph 编译
 │   ├── [nodes.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/nodes.py)                    4 节点函数 + 降级处理
 │   ├── [state.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/state.py)                    OrchestratorState TypedDict
@@ -652,6 +656,7 @@ graph TB
         SModels["models.ErrorResponse"]
         Prompt["prompts/system_prompt.yaml<br/>+ quality + scheduler"]
         DBSchema["db_schema.sql<br/>3 张表 DDL"]
+        DB["db.py<br/>get_pg_pool()<br/>save_workflow / get_workflow"]
     end
 
     subgraph QualityMod["agent-quality/"]
@@ -707,7 +712,7 @@ graph TB
     RC --> LLM
     RC --> VS
     RC --> Prompt
-    AlertStore --> PG
+    AlertStore --> DB
 
     ASMain --> Planner
     ASMain --> Urgent
@@ -720,11 +725,12 @@ graph TB
     Urgent --> OrderStore
     Urgent --> LLM
     Urgent --> Prompt
-    OrderStore --> PG
+    OrderStore --> DB
 
     AOMain --> Graph
     AOMain --> AOModels
     AOMain --> Obs
+    AOMain --> DB
     Graph --> Nodes
     Nodes --> State
     Nodes --> AgentClients
@@ -738,11 +744,13 @@ graph TB
 
     LLM -->|"AsyncClient"| LLM_API
     VS -->|pymilvus| Mil
+    DB -->|asyncpg| PG
     Cfg --> LLM
     Cfg --> VS
     Cfg --> AQDC
     Cfg --> ASDC
     Cfg --> AgentClients
+    Cfg --> DB
     AQModels --> SModels
     ASModels --> SModels
     AOModels --> SModels
@@ -753,8 +761,8 @@ graph TB
 #### 5.4.1 设备故障编排调用链（`POST /v1/orchestrator/device_fault`，LangGraph 全链路）
 
 ```
-POST /api/agent/orchestrator/device_fault
-  → smt-gateway:8080 (AgentAuthWebFilter JWT 校验)
+POST /api/agent/v1/orchestrator/device_fault
+  → smt-gateway:8080 (AgentAuthWebFilter JWT 校验, StripPrefix=2)
   → agent-orchestrator:8005 /v1/orchestrator/device_fault
   → main.device_fault(req) async
       └─ workflow_id = f"wf-{uuid4().hex[:12]}"
@@ -777,7 +785,7 @@ POST /api/agent/orchestrator/device_fault
                   └─ llm_client.achat(汇总 prompt)        [AsyncClient, 60s timeout, tenacity]
                   └─ state.summary = LLM 输出文本
       └─ status = _determine_status(result)              [SUCCESS / PARTIAL / FAILED]
-      └─ _store_workflow(workflow_id, status, result)    [内存 dict, 上限 100]
+      └─ shared.db.save_workflow(workflow_id, status, result)  [PG workflows 表 UPSERT, 重启不丢失]
   → WorkflowResponse(workflow_id, status, diagnosis, quality_assessment,
                      schedule_adjustment, summary, errors)
 ```
@@ -785,8 +793,8 @@ POST /api/agent/orchestrator/device_fault
 #### 5.4.2 质量根因分析调用链（`POST /v1/quality/root_cause`，全 async）
 
 ```
-POST /api/agent/quality/root_cause
-  → smt-gateway:8080 (AgentAuthWebFilter JWT 校验)
+POST /api/agent/v1/quality/root_cause
+  → smt-gateway:8080 (AgentAuthWebFilter JWT 校验, StripPrefix=2)
   → agent-quality:8003 /v1/quality/root_cause
   → main.analyze_root_cause(req) async
       └─ root_cause.analyze(device_id, defect_description) async
@@ -803,8 +811,8 @@ POST /api/agent/quality/root_cause
 #### 5.4.3 智能排产调用链（`POST /v1/scheduler/plan/generate`，全 async）
 
 ```
-POST /api/agent/scheduler/plan/generate
-  → smt-gateway:8080 (AgentAuthWebFilter JWT 校验)
+POST /api/agent/v1/scheduler/plan/generate
+  → smt-gateway:8080 (AgentAuthWebFilter JWT 校验, StripPrefix=2)
   → agent-scheduler:8001 /v1/scheduler/plan/generate
   → main.generate_plan(req) async
       └─ planner.generate_plan() async
@@ -853,7 +861,7 @@ POST /api/agent/scheduler/plan/generate
 
 | 文件 | 维度 | 职责 |
 |---|---|---|
-| [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/main.py) | 入口 | FastAPI 2 接口 + /v1/ + async + /healthz + 内存工作流存储 + 状态判定 |
+| [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/main.py) | 入口 | FastAPI 2 接口 + /v1/ + async + /healthz + lifespan + PG 工作流持久化 + 状态判定 |
 | [`graph.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/graph.py) | 编排 | LangGraph StateGraph 编译（顺序图） |
 | [`nodes.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/nodes.py) | 编排 | 4 节点函数 + 降级处理 |
 | [`state.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-orchestrator/state.py) | 编排 | OrchestratorState TypedDict |
@@ -868,6 +876,7 @@ POST /api/agent/scheduler/plan/generate
 | [`config.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/config.py) | 配置 | 追加 13 项 Phase 3 配置 |
 | [`vector_store.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/vector_store.py) | 外部调用 | COLLECTIONS 追加 `smt_quality_cases` |
 | [`db_schema.sql`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db_schema.sql) | 持久化 | **新增**：3 张表 DDL |
+| [`db.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db.py) | 持久化 | **修复批次新增**：PG 连接池公共模块 + orchestrator 工作流持久化 |
 | [`prompts/system_prompt.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/prompts/system_prompt.yaml) | Prompt | 追加 quality + scheduler 两套中文 prompt |
 
 #### 5.5.5 `tests/` Phase 3 新增（9 个测试文件）
@@ -916,7 +925,7 @@ POST /api/agent/scheduler/plan/generate
 | 🟠 P1 | P1-2 | `planner` 设备查询串行，N 次串行 HTTP 调用影响并发性 | 未修复 | [`[performance-eval-phase3#P1-2]`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase3.md) |
 | 🟠 P1 | P1-3 | tenacity 重试无 jitter，多实例并发重试时压垮 sub-agent | ✅ 已修复 | [`[performance-eval-phase3#P1-3]`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase3.md) |
 | 🟡 MEDIUM | F1 | `vector_store.search` / `delete_by_doc` 用 f-string 拼 `doc_id` 到 Milvus 表达式（Phase 2 #2 复发），可构造表达式注入 | ✅ 已修复 | [`[security-scan-phase3#F1]`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/security-scan-phase3.md) |
-| 🟡 Medium | 4 | orchestrator `_workflows` 模块级 dict 内存存储，进程重启即丢失，上限 100 后丢弃旧记录 | 未修复 | [`[prd-conformance-review-phase3#4]`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase3.md) |
+| 🟡 Medium | 4 | orchestrator `_workflows` 模块级 dict 内存存储，进程重启即丢失，上限 100 后丢弃旧记录 | ✅ 已修复 | [`[prd-conformance-review-phase3#4]`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase3.md) |
 | 🟡 Medium | 1 | agent-quality 跨 Agent 导入 bug（kebab-case 包名无法 import） | ✅ 已修复 | [`[prd-conformance-review-phase3#1]`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase3.md) |
 | 🟢 LOW | F2 | dev 环境 CORS 配置为全开，任意源可携带凭据，Phase 3 新增 3 条路由使影响面扩大 | ✅ 已修复 | [`[security-scan-phase3#F2]`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/security-scan-phase3.md) |
 | 🟢 Low | 2 | `device_client` ConnectError 未转 `DeviceServiceUnavailable`，落 500 而非 503 | ✅ 已修复 | [`[prd-conformance-review-phase3#2]`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase3.md) |
@@ -931,7 +940,7 @@ POST /api/agent/scheduler/plan/generate
 
 1. **device_client 重复**：[`prd-conformance-review-phase3#3`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase3.md) + [`code-review-phase3#C4`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase3.md) + [`architecture-review-phase3#4.2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase3.md) + [`security-scan-phase3#F1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/security-scan-phase3.md)（4 份报告提及）
 2. **orchestrator 端到端串行**：[`performance-eval-phase3#P0-1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase3.md) + [`architecture-review-phase3#3.1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase3.md) + [`code-review-phase3#C1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase3.md)（3 份报告提及）
-3. **工作流状态内存存储**：[`prd-conformance-review-phase3#4`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase3.md) + [`architecture-review-phase3#4.1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase3.md)（2 份报告提及）
+3. **工作流状态内存存储**（✅ 修复批次已迁移到 PG）：[`prd-conformance-review-phase3#4`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase3.md) + [`architecture-review-phase3#4.1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase3.md)（2 份报告提及）
 
 ### 6.3 延期至 Phase 4+ 的项目
 
@@ -1033,7 +1042,7 @@ bash scripts/dev_restart.sh
 | PostgreSQL | 5432 | Phase 1 | 关系库（Phase 3 新增 3 张表） |
 | Redis | 6379 | Phase 1 | 缓存 |
 | Zookeeper | 2181 | Phase 1 | Kafka 依赖 |
-| Kafka | 9092 | Phase 1 | 消息队列（声明未用） |
+| Kafka | 9092 | Phase 1 | 消息队列（Phase 4 事件驱动待接入） |
 | Mosquitto | 1883 | Phase 1 | MQTT Broker |
 | etcd | 2379 | Phase 2 | Milvus 元数据 |
 | Minio | 9000 / 9001 | Phase 2 | Milvus 对象存储 |
@@ -1054,4 +1063,3 @@ bash scripts/dev_restart.sh
 8. 阅读 `scripts/dev_restart.sh` 与 `python-agents/README.md` 端口映射
 9. `git log` 确认分支与提交历史
 10. 用 Mermaid 绘制架构图、依赖图、时序图（遵循规则文件 §4 subgraph ID 纯 ASCII + 标签加引号规范）
-

@@ -36,14 +36,14 @@
 
 ### 网关路由
 
-| 路径                           | 目标服务                    | 鉴权  |
-| ---------------------------- | ----------------------- | --- |
-| `/api/device/**`             | smt-device-service:8081 | 放行  |
-| `/api/agent/knowledge/**`    | agent-knowledge:8004    | JWT |
-| `/api/agent/maintenance/**`  | agent-maintenance:8002  | JWT |
-| `/api/agent/quality/**`      | agent-quality:8003      | JWT |
-| `/api/agent/scheduler/**`    | agent-scheduler:8001    | JWT |
-| `/api/agent/orchestrator/**` | agent-orchestrator:8005 | JWT |
+| 路径                                | 目标服务                    | 鉴权  | StripPrefix |
+| --------------------------------- | ----------------------- | --- | ----------- |
+| `/api/device/**`                  | smt-device-service:8081 | 放行  | —           |
+| `/api/agent/v1/knowledge/**`      | agent-knowledge:8004    | JWT | 2           |
+| `/api/agent/v1/maintenance/**`     | agent-maintenance:8002  | JWT | 2           |
+| `/api/agent/v1/quality/**`         | agent-quality:8003      | JWT | 2           |
+| `/api/agent/v1/scheduler/**`       | agent-scheduler:8001    | JWT | 2           |
+| `/api/agent/v1/orchestrator/**`    | agent-orchestrator:8005 | JWT | 2           |
 
 ### 中间件（9 个 Docker 服务）
 
@@ -51,7 +51,7 @@
 | ------------------------- | ------- | ---------- |
 | PostgreSQL 16             | Phase 1 | 业务主库       |
 | Redis 7                   | Phase 1 | 缓存 + 会话    |
-| Zookeeper 3.9 + Kafka 3.7 | Phase 1 | 事件流        |
+| Zookeeper + Kafka (wurstmeister) | Phase 1 | 事件流（Phase 4 待接入） |
 | Mosquitto 2.0             | Phase 1 | MQTT 边缘接入  |
 | etcd 3.5                  | Phase 2 | Milvus 元数据 |
 | MinIO                     | Phase 2 | 对象存储       |
@@ -67,7 +67,7 @@
 ```bash
 cd docker-compose
 cp .env.example .env   # 按需填入生产值，.env 已被 .gitignore 排除
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 2. Java 后端
@@ -106,7 +106,10 @@ npm run build      # 生产构建
 
 ```bash
 bash scripts/build_all.sh       # Java → Python 全量构建
+bash scripts/start_all.sh       # 启动所有本地服务
+bash scripts/api_integration_test.sh # 测试所有 API 接口
 bash scripts/dev_restart.sh     # 重启所有本地服务
+bash scripts/stop_all.sh        # 停止所有本地服务
 ```
 
 ## 项目阶段进展
@@ -115,17 +118,17 @@ bash scripts/dev_restart.sh     # 重启所有本地服务
 | ------- | --- | ---------------------------------------------------------------- |
 | Phase 1 | 已完成 | 设备接入 + 数据采集 + API 网关 + InfluxDB 时序双写 + 可观测性基线；8 项 P0 + P1 问题修复   |
 | Phase 2 | 已完成 | 知识助手 Agent（RAG）+ 设备运维 Agent + Milvus 向量库 + JWT 鉴权 + P0 修复与全量重构   |
-| Phase 3 | 已完成 | 质量分析 Agent + 调度 Agent + LangGraph 多 Agent 编排；6 份审查报告已生成；待合并 main |
-| Phase 4 | 规划中 | 执行协同 Agent + 全流程闭环（Kafka 事件驱动）                                   |
+| Phase 3 | 已完成 | 质量分析 Agent + 调度 Agent + LangGraph 多 Agent 编排；6 份审查报告已生成；BLOCK/P1/P2/P3 修复批次完成 |
+| Phase 4 | 规划中 | 执行协同 Agent + 全流程闭环（Kafka 事件驱动）（前置阻塞已修复）                          |
 | Phase 5 | 规划中 | 系统集成测试 + 产线试点                                                    |
 
-**测试覆盖**：Java 57 个单元测试 + Python 176 个测试全部通过（覆盖率 77.28%）。
+**测试覆盖**：Java 57 个单元测试全部通过（0 失败）；Python 175 个测试通过、1 个预存失败（LLM_API_KEY 环境变量）、2 跳过；API 集成测试 11/12 通过（1 项预期失败：LM Studio 认证，SEC-4 设计）。
 
 **Phase 1 交付**：smt-common / smt-gateway / smt-device-service 三模块 + OPC UA + MQTT 双通道采集 + Redis 缓存 + InfluxDB 时序双写 + 结构化日志。详见 [Phase 1 说明](docs/explaination/project-explanation-phase1.md)。
 
 **Phase 2 交付**：agent-knowledge（4 接口）+ agent-maintenance（4 接口）+ shared 公共模块（llm\_client / vector\_store / observability）+ Milvus RAG 链路 + 网关路由与鉴权 + API 版本化（/v1 前缀）。详见 [Phase 2 说明](docs/explaination/project-explanation-phase2.md)。
 
-**Phase 3 交付**：agent-quality（4 接口）+ agent-scheduler（5 接口）+ agent-orchestrator（2 接口，LangGraph 编排）+ shared 公共层扩展（db\_schema.sql / vector\_store 追加 smt\_quality\_cases / config 追加 quality\_\* / scheduler\_\*）+ 网关 3 条新路由 + API 契约 11 接口扩展。详见 [Phase 3 说明](docs/explaination/project-explanation-phase3.md)。
+**Phase 3 交付**：agent-quality（4 接口）+ agent-scheduler（5 接口）+ agent-orchestrator（2 接口，LangGraph 编排）+ shared 公共层扩展（db.py 连接池公共模块 / db\_schema.sql / vector\_store 追加 smt\_quality\_cases / config 追加 quality\_\* / scheduler\_\*）+ 网关 5 条路由（`/api/agent/v1/<module>/**` + StripPrefix=2）+ API 契约 11 接口扩展。详见 [Phase 3 说明](docs/explaination/project-explanation-phase3.md)。
 
 **未启动**：C++ 原生层（Phase 5 规划）、前端页面（骨架已搭建，待实际开发）。
 

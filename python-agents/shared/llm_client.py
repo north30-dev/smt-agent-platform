@@ -50,6 +50,17 @@ def _reset_client() -> None:
     _client_instance = None
 
 
+async def aclose() -> None:
+    """关闭共享 AsyncClient（供 FastAPI lifespan shutdown 调用）。
+
+    幂等：客户端未创建或已关闭时直接返回。
+    """
+    global _client_instance
+    if _client_instance is not None:
+        await _client_instance.aclose()
+        _client_instance = None
+
+
 def _headers() -> dict:
     """构造鉴权请求头。"""
     return {"Authorization": f"Bearer {settings.llm_api_key}"}

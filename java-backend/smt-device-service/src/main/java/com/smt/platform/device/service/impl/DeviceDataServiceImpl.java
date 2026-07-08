@@ -13,6 +13,7 @@ import com.smt.platform.device.repository.InfluxDBRepository;
 import com.smt.platform.device.service.DeviceDataService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -38,6 +39,7 @@ public class DeviceDataServiceImpl extends ServiceImpl<DeviceDataMapper, DeviceD
     }
 
     @Async("deviceDataExecutor")
+    @Transactional
     @Override
     public void saveData(Long deviceId, String datapointCode, String value, LocalDateTime timestamp) {
         DeviceData data = new DeviceData();

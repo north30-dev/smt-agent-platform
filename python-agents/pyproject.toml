@@ -45,7 +45,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["agent_knowledge", "agent_maintenance", "agent_quality", "agent_scheduler", "agent_orchestrator", "shared"]
+source = ["agent-knowledge", "agent-maintenance", "agent-quality", "agent-scheduler", "agent-orchestrator", "shared"]
 omit = ["tests/*", "*/__init__.py"]
 
 [tool.coverage.report]

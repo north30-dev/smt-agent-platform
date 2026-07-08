@@ -1,35 +1,15 @@
 """质量告警记录 PostgreSQL 存储。
 
-使用 asyncpg 连接池，与 shared.doc_meta_store 模式对齐。
+使用 asyncpg 连接池，与 shared.db 公共连接池对齐。
 多副本部署时各副本共享同一 PG，避免告警丢失。
 错误不在本模块捕获，统一交由 main.py 异常处理器兜底。
 """
 
 from datetime import datetime, timezone
 
-import asyncpg
-
 from shared.config import settings
-
-# 模块级连接池（懒初始化）
-_pool: asyncpg.Pool | None = None
-
-
-async def _get_pool() -> asyncpg.Pool:
-    """懒初始化 asyncpg 连接池。"""
-    global _pool
-    if _pool is not None:
-        return _pool
-    _pool = await asyncpg.create_pool(
-        host=settings.postgres_host,
-        port=settings.postgres_port,
-        database=settings.postgres_db,
-        user=settings.postgres_user,
-        password=settings.postgres_password,
-        min_size=1,
-        max_size=5,
-    )
-    return _pool
+from shared.db import close_pool as _shared_close_pool
+from shared.db import get_pg_pool
 
 
 async def save_alert(
@@ -51,7 +31,7 @@ async def save_alert(
     Returns:
         新插入记录的自增 id。
     """
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "INSERT INTO quality_alerts "
@@ -86,7 +66,7 @@ async def list_alerts(page: int = 1, size: int | None = None) -> dict:
         size = 1
     offset = (page - 1) * size
 
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         total_row = await conn.fetchrow(
             "SELECT COUNT(*) AS cnt FROM quality_alerts"
@@ -135,8 +115,5 @@ def _row_to_dict(row) -> dict:
 
 
 async def close_pool() -> None:
-    """关闭连接池（仅供测试清理使用）。"""
-    global _pool
-    if _pool is not None:
-        await _pool.close()
-        _pool = None
+    """关闭连接池（仅供测试清理使用，委托 shared.db.close_pool）。"""
+    await _shared_close_pool()

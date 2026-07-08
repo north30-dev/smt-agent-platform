@@ -5,14 +5,23 @@
 
 编排流程：设备故障 → 串行调用 maintenance → quality → scheduler → LLM 汇总。
 任何子 Agent 不可用时降级为 skipped 状态，工作流继续执行。
+
+REL-1：工作流状态持久化到 PostgreSQL workflows 表（shared.db），进程重启不丢失。
 """
 
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from shared.config import settings
+from shared.db import (
+    close_pool,
+    get_workflow as _get_workflow,
+    init_workflow_table,
+    save_workflow,
+)
 from shared.llm_client import LLMClientError
 from shared.models import ErrorResponse
 from shared.observability import (
@@ -25,6 +34,35 @@ from .agent_clients import AgentUnavailable
 from .graph import app_graph
 from .models import DeviceFaultRequest, WorkflowResponse
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：startup 初始化 workflows 表，shutdown 关闭共享客户端（RES-1）。"""
+    # startup：幂等创建 workflows 表
+    try:
+        await init_workflow_table()
+    except Exception as exc:
+        logger.warning("startup: init_workflow_table failed", error=str(exc))
+    yield
+    # shutdown：关闭共享 httpx 客户端与 PG 连接池
+    try:
+        from shared.llm_client import aclose as _aclose_llm
+
+        await _aclose_llm()
+    except Exception as exc:
+        logger.warning("shutdown: close llm_client failed", error=str(exc))
+    try:
+        from .agent_clients import aclose as _aclose_agents
+
+        await _aclose_agents()
+    except Exception as exc:
+        logger.warning("shutdown: close agent_clients failed", error=str(exc))
+    try:
+        await close_pool()
+    except Exception as exc:
+        logger.warning("shutdown: close pg pool failed", error=str(exc))
+
+
 app = FastAPI(
     title="SMT Agent 编排服务",
     description=(
@@ -32,24 +70,12 @@ app = FastAPI(
         "急单调度调整三阶段，并提供 LLM 汇总摘要。"
     ),
     version="0.3.0",
+    lifespan=lifespan,
 )
 
 setup_logging(settings.log_level)
 logger = get_logger("agent-orchestrator")
 register_health_endpoint(app, "agent-orchestrator")
-
-# 内存工作流存储（最大 100 条，超出丢弃最旧）
-_MAX_WORKFLOWS = 100
-_workflows: dict[str, dict] = {}
-
-
-def _store_workflow(workflow_id: str, status: str, result: dict) -> None:
-    """存入工作流结果，超过上限时丢弃最旧条目。"""
-    if len(_workflows) >= _MAX_WORKFLOWS:
-        # 丢弃最旧的一条（dict 保持插入顺序）
-        oldest = next(iter(_workflows))
-        _workflows.pop(oldest, None)
-    _workflows[workflow_id] = {"status": status, "result": result}
 
 
 def _determine_status(result: dict) -> str:
@@ -111,7 +137,8 @@ async def device_fault(req: DeviceFaultRequest):
     result = await app_graph.ainvoke(initial_state)
     status = _determine_status(result)
 
-    _store_workflow(workflow_id, status, result)
+    # REL-1：持久化工作流到 PostgreSQL，进程重启不丢失
+    await save_workflow(workflow_id, status, result)
     logger.info(
         "orchestrator workflow completed",
         workflow_id=workflow_id,
@@ -136,7 +163,8 @@ async def device_fault(req: DeviceFaultRequest):
 )
 async def get_workflow(workflow_id: str):
     """查询已存储的工作流结果。"""
-    if workflow_id not in _workflows:
+    stored = await _get_workflow(workflow_id)
+    if stored is None:
         return JSONResponse(
             status_code=404,
             content=ErrorResponse(
@@ -144,16 +172,14 @@ async def get_workflow(workflow_id: str):
                 message=f"工作流不存在: {workflow_id}",
             ).model_dump(),
         )
-    stored = _workflows[workflow_id]
-    result = stored["result"]
     return WorkflowResponse(
-        workflow_id=workflow_id,
+        workflow_id=stored["workflow_id"],
         status=stored["status"],
-        diagnosis=result.get("diagnosis"),
-        quality_assessment=result.get("quality_assessment"),
-        schedule_adjustment=result.get("schedule_adjustment"),
-        summary=result.get("summary"),
-        errors=result.get("errors") or {},
+        diagnosis=stored.get("diagnosis"),
+        quality_assessment=stored.get("quality_assessment"),
+        schedule_adjustment=stored.get("schedule_adjustment"),
+        summary=stored.get("summary"),
+        errors=stored.get("errors") or {},
     )
 
 

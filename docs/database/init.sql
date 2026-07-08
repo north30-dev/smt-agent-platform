@@ -1,3 +1,5 @@
+-- Phase 1-2 原始 DDL 来源（device/device_data_point/device_data/doc_meta 四表）。
+-- Docker 环境实际初始化使用 docker-compose/init/01-schema.sql。
 -- =============================================================================
 -- SMT 设备服务数据库初始化脚本（PostgreSQL）
 --

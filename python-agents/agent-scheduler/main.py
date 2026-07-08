@@ -4,6 +4,8 @@
 对外路径前缀 /v1/scheduler/**（经 smt-gateway StripPrefix=2 后落地本服务）。
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 
@@ -29,6 +31,22 @@ from .models import (
     UrgentResponse,
 )
 
+# VAL-4：合法订单状态枚举（与 api-contracts/openapi/agent_api.yaml 对齐）
+VALID_ORDER_STATUSES = {"PENDING", "PLANNED", "COMPLETED", "CANCELLED"}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：shutdown 时关闭共享 httpx 客户端（RES-1）。"""
+    yield
+    try:
+        from shared.llm_client import aclose as _aclose_llm
+
+        await _aclose_llm()
+    except Exception as exc:
+        logger.warning("shutdown: close llm_client failed", error=str(exc))
+
+
 app = FastAPI(
     title="SMT 调度智能体",
     description=(
@@ -36,6 +54,7 @@ app = FastAPI(
         "基于订单优先级 + 设备状态 + 物料齐套生成最优排产计划。"
     ),
     version="0.3.0",
+    lifespan=lifespan,
 )
 
 setup_logging(settings.log_level)
@@ -72,6 +91,17 @@ async def list_orders(
     status: str | None = Query(None, description="按状态过滤订单"),
 ):
     """查询订单列表，可按状态筛选。"""
+    if status is not None and status not in VALID_ORDER_STATUSES:
+        return JSONResponse(
+            status_code=400,
+            content=ErrorResponse(
+                error="invalid_param",
+                message=(
+                    f"非法 status 值: {status}，"
+                    f"合法值为 {sorted(VALID_ORDER_STATUSES)}"
+                ),
+            ).model_dump(),
+        )
     records = await order_store.list_orders(status=status)
     return OrderListResponse(
         records=[OrderResponse(**r) for r in records],

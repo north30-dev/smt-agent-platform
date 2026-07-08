@@ -57,7 +57,11 @@ ORCHESTRATOR_PORT="${SMT_ORCHESTRATOR_PORT:-8005}" # agent-orchestrator
 # 大模型服务（LM Studio）— 默认指向 WSL 宿主机
 LM_STUDIO_HOST="${LM_STUDIO_HOST:-192.168.116.1}"
 LM_STUDIO_PORT="${LM_STUDIO_PORT:-1234}"
-LM_STUDIO_API_KEY="${LM_STUDIO_API_KEY:-sk-lm-dbMlwJNn:IJyAOrh0mrvZ6eeJJ2OA}"
+# SEC-4：从环境变量读取，禁止硬编码密钥；未设置时仅告警，不阻断脚本
+LM_STUDIO_API_KEY="${LM_STUDIO_API_KEY:-}"
+if [ -z "$LM_STUDIO_API_KEY" ]; then
+    echo "⚠️ LM_STUDIO_API_KEY 未设置，LLM 功能不可用" >&2
+fi
 
 # 构造完整 URL（避免脚本里反复拼接）
 JAVA_BASE="http://$HOST:$JAVA_PORT"
@@ -75,6 +79,8 @@ DB_USER="${SMT_DB_USERNAME:-smt}"
 # 注意：运维脚本从宿主机连 PG，用 localhost + 宿主机映射端口，不用容器内地址
 PG_CONTAINER_NAME="${PG_CONTAINER_NAME:-smt-postgres}"
 
-# 管理员凭据（用于 JWT 认证测试，从 docker-compose/.env 读取）
+# 管理员凭据（用于 JWT 认证测试）
+# 注意：SMT_ADMIN_PASSWORD 是 BCrypt 哈希（供 device-service 读取），不是明文密码。
+# 测试脚本发送的明文密码用 SMT_ADMIN_PASSWORD_PLAIN，默认 dev-only-admin
 ADMIN_USERNAME="${SMT_ADMIN_USERNAME:-admin}"
-ADMIN_PASSWORD="${SMT_ADMIN_PASSWORD:-dev-only-admin}"
+ADMIN_PASSWORD="${SMT_ADMIN_PASSWORD_PLAIN:-dev-only-admin}"

@@ -184,3 +184,13 @@ def reset_device_client() -> None:
     global device_client
     if device_client._owns_client:
         device_client._client = None
+
+
+async def aclose() -> None:
+    """关闭单例的内部 HTTP 客户端（供 FastAPI lifespan shutdown 调用）。
+
+    幂等：客户端未创建或已关闭时直接返回。
+    """
+    if device_client._client is not None:
+        await device_client._client.aclose()
+        device_client._client = None

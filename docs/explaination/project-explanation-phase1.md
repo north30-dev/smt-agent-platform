@@ -17,7 +17,7 @@
 
 本项目定位为面向电子制造 SMT（表面贴装）生产线的工业智能体平台，通过多智能体协同实现"感知—决策—规划—执行"全链路运营闭环。完整规划为 5 个阶段、约 10 个月交付周期（详见 [PRD §6](file:///home/north30/projects/Personal/smt-agent-platform/docs/PRD.md)）。
 
-**当前进度一句话**：Phase 1（Java 服务底座 + 设备数据接入）代码层面全量交付完成，P0/P1 问题全部修复，71 个单元测试全绿，Phase 1 已通过 PR #3 合并至 `main`；端到端运行验证因本机 Docker Hub 不可达而跳过。
+**当前进度一句话**：Phase 1（Java 服务底座 + 设备数据接入）代码层面全量交付完成，P0/P1 问题全部修复，71 个单元测试全绿，Phase 1 已通过 PR #3 合并至 `main`；端到端运行验证因本机 Docker Hub 不可达而跳过。注：网关 StripPrefix 配置错误导致 Agent 接口 404 的问题已在修复批次中解决（详见 §4.3）。
 
 **已交付**：Java Maven 多模块工程（`smt-common` / `smt-gateway` / `smt-device-service`）、PostgreSQL + Redis + Kafka + Mosquitto + InfluxDB 中间件编排、设备台账 CRUD、采集点配置、OPC UA + MQTT 双通道数据接入、实时数据存储（PG + InfluxDB 双写）与历史查询、健康评分（@Async + 配置外置）、Mock 数据生成器、Spring Security + JWT RBAC 骨架、网关 reactive JWT 鉴权过滤器、可观测性（actuator + micrometer + 慢 SQL 日志）、@Async 异步化（双线程池）、Redis 缓存、BaseEntity 审计字段自动填充、DTO JSR-380 校验增强、OPC UA 参数配置化、日志 Profile 隔离、OpenAPI 契约、数据库 DDL。
 
@@ -34,7 +34,7 @@
 | **Phase 1** | 第 1-2 月 | Java 服务底座 + 设备数据接入 | 🟢 代码完成 + P0/P1 修复完成，已合并 `main` |
 | Phase 2 | 第 3-4 月 | 知识助手 Agent（RAG）+ 设备运维 Agent | 🟡 代码完成 + P0 修复完成，未合并 `main` |
 | Phase 3 | 第 5-6 月 | 质量分析 Agent + 调度 Agent | ⬜ 未启动 |
-| Phase 4 | 第 7-8 月 | 执行协同 Agent + 全流程闭环 | ⬜ 未启动 |
+| Phase 4 | 第 7-8 月 | 执行协同 Agent + 全流程闭环 | ⬜ 未启动（前置阻塞已修复） |
 | Phase 5 | 第 9-10 月 | 系统集成测试 + 产线试点 | ⬜ 未启动 |
 
 ### 2.2 Phase 1 详细进度
@@ -82,19 +82,27 @@
 ### 2.3 Git 状态
 
 ```
-* 908c621 (HEAD -> feature/agent-layer-init) feat: 完成 phase2 全量功能迭代与架构升级
-  bb2a107 test(agents): 补齐全模块测试覆盖与契约校验
-  8d778f6 refactor(agents): 完成 Phase2 P0 阶段全量重构与交付
-  afb9c3b chore: 完成 Phase1 收尾 P1 问题批量修复
-  0c706ae docs(explaination): 新增 Phase 2 智能体层项目说明
-  6fa98c4 feat(agents): 新增 Phase 2 Python 智能体层
-  8b259af refactor(device-service): 测试方法名由中文改为英文
-  a9ad02d (origin/main, main) Merge pull request #3
+* 24a56e4 (origin/feature/quality-scheduler-orchestration) fix(scripts&docker): 完整引入Kafka和Zookeeper支持
+  9a90672 refactor(sevice): 完成项目代码大重构与功能优化
+  cb580b3 docs(explaination): 更新README文档，新增 Phase3 项目说明报告
+  dde26bc feat(agents): 新增 Phase3 全量智能体能力，完成多Agent编排闭环
+  3c48361 Merge pull request #4 from north30-dev/feature/agent-layer-init
+  02e2922 refactor(device): 调整Mybatis慢SQL拦截器的签名参数
+  c117d5f chore(agents): 替换Poetry为uv作为Python依赖管理工具
+  38598c4 docs(explaination): 更新README文档，补充模块概览与阶段交付说明
+  908c621 feat: 完成 phase2 全量功能迭代与架构升级
+  ...
+  a9ad02d Merge pull request #3 from north30-dev/feature/initial-scaffold
   ...
 ```
 
-- Phase 1 已通过 PR #3 合并至 `main`（commit a9ad02d）
-- 后续 P0/P1 修复和 Phase 2 开发在 `feature/agent-layer-init` 分支进行
+- Phase 1 已通过 PR #3 合并至 `main`（commit a9ad02d），Phase 2/3 通过 PR #4 合并
+- 修复批次（BLOCK/P1/P2/P3 问题）在 `feature/quality-scheduler-orchestration` 分支进行，**当前为工作区修改，尚未提交**
+- 修复批次验证运行结果（2026-07-09）：
+  - Java：57 个用例全绿，0 失败，BUILD SUCCESS
+  - Python：175 通过 / 1 失败（预存 LLM_API_KEY 环境变量问题，与本次修复无关）/ 2 跳过
+  - 集成测试：11/12 通过，1 项预期失败（LM Studio 鉴权，SEC-4 设计，`config.sh` 已不再硬编码 API key）
+- 待修复批次 commit 后，再补充 commit hash 至本节
 
 ---
 
@@ -109,7 +117,7 @@ PRD §3.1 设计了"交互层 / 智能体层 / 服务层 / 数据层"四层架�
 | 交互层（Frontend） | Web 控制台、移动端、数字孪生大屏 | ❌ 仅占位目录（`frontend/src/pages/` 6 个空目录），无实现文件 |
 | 智能体层（Agent） | 5 个 Python Agent（调度/运维/质量/知识/执行） | ❌ 未启动（Phase 2 已交付 2 个） |
 | 服务层（Service） | Java 微服务群 + 消息队列 | 🟡 `smt-common`（含 Security+审计）/ `smt-gateway`（含 JWT 鉴权）/ `smt-device-service`（含 @Async+缓存+双写）；缺 order/quality/notification/agent-router |
-| 数据层（Data） | PostgreSQL + InfluxDB + Milvus + 工业协议 | 🟡 PostgreSQL + Redis（已用缓存）+ Kafka（声明未用）+ Mosquitto + InfluxDB（已编排+双写代码就绪）；Milvus 未编排（Phase 2） |
+| 数据层（Data） | PostgreSQL + InfluxDB + Milvus + 工业协议 | 🟡 PostgreSQL + Redis（已用缓存）+ Kafka（Phase 4 事件驱动待接入）+ Mosquitto + InfluxDB（已编排+双写代码就绪）；Milvus 未编排（Phase 2） |
 
 ### 3.2 模块划分（当前实现）
 
@@ -159,13 +167,11 @@ graph TB
     DS -->|"@Cacheable"| Redis
     DS -->|"Paho 订阅"| MQTT
     DS -->|"InfluxDB 双写"| InfluxDB
-    DS -.->|"声明未用"| Kafka
+    DS -->|"Phase 4 待接入"| Kafka
     Device -->|"MQTT publish"| MQTT
-
-    style Kafka fill:#ffe,stroke:#999,stroke-dasharray: 5 5
 ```
 
-> 虚线节点表示中间件已编排但业务层零调用（详见 §六风险摘要）。
+> Kafka 节点表示中间件已编排但业务层暂未接入，Phase 4 事件驱动改造时启用（详见 §六风险摘要）。
 
 ### 3.3 技术栈选型
 
@@ -179,7 +185,6 @@ graph TB
 | Java 后端 | Eclipse Milo | 0.6.13 | OPC UA 客户端 | [`smt-device-service/pom.xml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/pom.xml) |
 | Java 后端 | Eclipse Paho | 1.2.5 | MQTT 客户端 | 同上 |
 | Java 后端 | jjwt | 0.12.5 | JWT 生成/解析 | [`smt-common/pom.xml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-common/pom.xml) |
-| Java 后端 | Hutool | 5.8.27 | 工具集 | 同上 |
 | Java 后端 | PostgreSQL Driver | 42.7.3 | JDBC | [`smt-device-service/pom.xml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/pom.xml) |
 | Java 后端 | spring-boot-starter-actuator | 由 BOM 管理 | 可观测性端点 | [`application.yml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/src/main/resources/application.yml) |
 | Java 后端 | micrometer-registry-prometheus | 由 BOM 管理 | Prometheus 格式指标 | 同上 |
@@ -189,7 +194,7 @@ graph TB
 | Java 后端 | JaCoCo Maven Plugin | 0.8.12 | 测试覆盖率 | [`pom.xml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/pom.xml) |
 | 数据层 | PostgreSQL | 16-alpine | 关系库 | [`docker-compose.yml`](file:///home/north30/projects/Personal/smt-agent-platform/docker-compose/docker-compose.yml) |
 | 数据层 | Redis | 7-alpine | 缓存（已用） | 同上 |
-| 数据层 | Kafka | 3.7 (bitnami) | 消息队列（声明未用） | 同上 |
+| 数据层 | Kafka | 2.7.1 (wurstmeister) + Zookeeper 3.4.6 | 消息队列（Phase 4 事件驱动待接入） | 同上 |
 | 数据层 | Mosquitto | 2.0.18 | MQTT Broker | 同上 |
 | 数据层 | InfluxDB | 2.7-alpine | 时序库（已编排，双写代码就绪） | 同上 |
 | 构建 | Maven | 多模块 | 父 POM 统一版本管理 | [`pom.xml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/pom.xml) |
@@ -211,7 +216,7 @@ sequenceDiagram
     DS->>DS: jwtUtil.generateToken(username, roles)
     DS-->>FE: {token, tokenType, expiresIn, username, roles}
 
-    FE->>GW: GET /api/agent/knowledge/documents<br/>Authorization: Bearer {token}
+    FE->>GW: GET /api/agent/v1/knowledge/documents<br/>Authorization: Bearer {token}
     GW->>GW: AgentAuthWebFilter 校验 token
     GW->>GW: jwtUtil.parseToken → 取 subject + roles
     GW->>GW: 放行（token 有效）
@@ -296,7 +301,7 @@ sequenceDiagram
 |---|---|
 |[`.gitignore`](file:///home/north30/projects/Personal/smt-agent-platform/.gitignore) | 忽略 `target/`、`__pycache__/`、`build/`、`node_modules/`、`.env`、IDE 配置 |
 |[`.editorconfig`](file:///home/north30/projects/Personal/smt-agent-platform/.editorconfig) | 4 空格缩进（前端 2 空格）、LF 换行、文件末尾空行 |
-| [`docker-compose/docker-compose.yml`](file:///home/north30/projects/Personal/smt-agent-platform/docker-compose/docker-compose.yml) | PG(5432) / Redis(6379) / ZK(2181) / Kafka(9092) / Mosquitto(1883) / InfluxDB(8086) + 三网络隔离 + 凭据环境变量化 |
+| [`docker-compose/docker-compose.yml`](file:///home/north30/projects/Personal/smt-agent-platform/docker-compose/docker-compose.yml) | PG(5432) / Redis(6379) / ZK(2181) / Kafka(9092) / Mosquitto(1883) / InfluxDB(8086) + 三网络隔离 + 凭据环境变量化；init/01-schema.sql 已合并 Phase 1-2 全部 DDL |
 | [`docker-compose/.env.example`](file:///home/north30/projects/Personal/smt-agent-platform/docker-compose/.env.example) | 全部环境变量模板 |
 | [`scripts/build_all.sh`](file:///home/north30/projects/Personal/smt-agent-platform/scripts/build_all.sh) | 一键构建脚本（含 Python poetry install） |
 | [`scripts/dev_restart.sh`](file:///home/north30/projects/Personal/smt-agent-platform/scripts/dev_restart.sh) | 一键重启脚本（含 Java 微服务 + Python Agent 后台启动） |
@@ -332,8 +337,10 @@ sequenceDiagram
 
 - 端口 8080
 - `/api/device/**` → `http://${SMT_DEVICE_SERVICE_HOST:localhost}:${SMT_DEVICE_SERVICE_PORT:8081}`
-- `/api/agent/knowledge/**` → `http://${SMT_AGENT_KNOWLEDGE_HOST:localhost}:${SMT_AGENT_KNOWLEDGE_PORT:8004}`（StripPrefix=2）
-- `/api/agent/maintenance/**` → `http://${SMT_AGENT_MAINTENANCE_HOST:localhost}:${SMT_AGENT_MAINTENANCE_PORT:8002}`（StripPrefix=2）
+- `/api/agent/v1/knowledge/**` → `http://${SMT_AGENT_KNOWLEDGE_HOST:localhost}:${SMT_AGENT_KNOWLEDGE_PORT:8004}`（StripPrefix=2，剥离 `/api/agent`，转发 `/v1/knowledge/**`）
+- `/api/agent/v1/maintenance/**` → `http://${SMT_AGENT_MAINTENANCE_HOST:localhost}:${SMT_AGENT_MAINTENANCE_PORT:8002}`（StripPrefix=2，剥离 `/api/agent`，转发 `/v1/maintenance/**`）
+
+> 修复批次说明：原配置 `Path=/api/agent/knowledge/**` 与 Python 侧注册的 `/v1/knowledge/**` 路径不匹配，导致网关 404。修复方案在网关 predicate 中加入 `/v1` 段（`Path=/api/agent/v1/knowledge/**`），保持 `StripPrefix=2` 不变，剥离 `/api/agent` 后转发 `/v1/knowledge/**` 给 Python Agent，与 Python 侧 FastAPI 路由对齐。maintenance 路由同此处理。
 
 ### 4.4 smt-device-service 设备服务（核心）
 
@@ -364,13 +371,13 @@ sequenceDiagram
 
 #### 4.4.3 OPC UA 数据接入（Eclipse Milo）
 
-**主要特性**：OpcUaProperties 配置化（`smt.opcua.publishing-interval-ms=100`、`sampling-interval-ms=50`、`queue-size=10`）；`@PreDestroy destroy()` 优雅关闭；`OpcUaSubscriber.createClient` 为 `protected` 工厂方法支持测试覆写。
+**主要特性**：OpcUaProperties 配置化（`smt.opcua.publishing-interval-ms=100`、`sampling-interval-ms=50`、`queue-size=10`）；`@PreDestroy destroy()` 优雅关闭；所有 `CompletableFuture.get()` 调用加 30 秒超时防启动卡死；`OpcUaSubscriber.createClient` 为 `protected` 工厂方法支持测试覆写。
 
 文件：[`OpcUaSubscriber.java`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/src/main/java/com/smt/platform/device/collect/opcua/OpcUaSubscriber.java)、[`OpcUaProperties.java`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/src/main/java/com/smt/platform/device/collect/opcua/OpcUaProperties.java)、[`DeviceDataCollector.java`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/src/main/java/com/smt/platform/device/collect/DeviceDataCollector.java)
 
 #### 4.4.4 MQTT 数据接入（Eclipse Paho）
 
-**主要特性**：按采集点 topic 订阅、payload 解析支持 JSON 与纯文本两种格式、`@PreDestroy destroy()` 安全断开连接。
+**主要特性**：按采集点 topic 订阅、payload 解析支持 JSON 与纯文本两种格式、`@PreDestroy destroy()` 安全断开连接；启用 `setAutomaticReconnect(true)` 断连自动重连。
 
 文件：[`MqttSubscriberManager.java`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/src/main/java/com/smt/platform/device/collect/mqtt/MqttSubscriberManager.java)、[`MqttDataCollector.java`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/src/main/java/com/smt/platform/device/collect/mqtt/MqttDataCollector.java)
 
@@ -418,7 +425,9 @@ sequenceDiagram
 | 登录获取 JWT | POST | `/api/auth/login` |
 | 查询当前用户信息 | GET | `/api/auth/me` |
 
-**主要特性**：Phase 1 固定 ADMIN 角色；用户名/密码通过 `smt.security.admin.*` 配置；JWT 过期时间 `smt.security.jwt.expiry-seconds`（默认 86400）。
+**主要特性**：Phase 1 固定 ADMIN 角色；密码存储为 BCrypt 哈希，通过 `smt.security.admin.*` 配置；登录校验使用 `PasswordEncoder.matches()`；JWT 过期时间 `smt.security.jwt.expiry-seconds`（默认 86400）。
+
+> 修复批次说明：BCrypt 哈希含 `$` 字符，与 Spring `${}` 占位符语法冲突，无法直接放入默认值。`application.yml` 中先用 `smt.security.admin.dev-hash` 明文属性存放哈希，再通过嵌套占位符 `${SMT_ADMIN_PASSWORD:${smt.security.admin.dev-hash}}` 引用——生产环境由 `SMT_ADMIN_PASSWORD` 注入真实哈希，dev 环境回退到 `dev-hash`。集成测试脚本 [`scripts/config.sh`](file:///home/north30/projects/Personal/smt-agent-platform/scripts/config.sh) 中 `ADMIN_PASSWORD` 改读 `SMT_ADMIN_PASSWORD_PLAIN`（明文，默认 `dev-only-admin`），与 `SMT_ADMIN_PASSWORD`（BCrypt 哈希）区分，避免误用哈希作为登录明文。
 
 文件：[`AuthController.java`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-device-service/src/main/java/com/smt/platform/device/controller/AuthController.java)
 
@@ -438,7 +447,7 @@ sequenceDiagram
 | 文件 | 说明 |
 |---|---|
 | [`api-contracts/openapi/device_api.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/api-contracts/openapi/device_api.yaml) | OpenAPI 3.0，覆盖设备 CRUD / 采集点 / 历史数据接口 |
-| [`docs/database/init.sql`](file:///home/north30/projects/Personal/smt-agent-platform/docs/database/init.sql) | PostgreSQL DDL：`device`（含 `uk_device_code` 唯一索引）/ `device_data_point` / `device_data` / `doc_meta` 四表 + 索引 + 中文注释 |
+| [`docs/database/init.sql`](file:///home/north30/projects/Personal/smt-agent-platform/docs/database/init.sql) | PostgreSQL DDL：`device`（含 `uk_device_code` 唯一索引）/ `device_data_point` / `device_data` / `doc_meta` 四表 + 索引 + 中文注释；已同步合并到 `docker-compose/init/01-schema.sql`，后者为 Docker 环境的唯一 DDL 入口 |
 
 **数据库表结构**：
 
@@ -774,7 +783,7 @@ MockMqttPublisher.publish()
 
 ```bash
 # 中间件（含 InfluxDB + 三网络隔离）
-cd docker-compose && docker-compose up -d
+cd docker-compose && docker compose up -d
 
 # Java 全量编译
 cd java-backend && mvn clean install -DskipTests
@@ -802,7 +811,8 @@ cd java-backend && mvn -pl smt-device-service spring-boot:run -Dspring-boot.run.
 | `smt.security.jwt.prefix` | `Bearer ` | 同上 |
 | `smt.security.jwt.expiry-seconds` | `86400` | 同上 |
 | `smt.security.admin.username` | `${SMT_ADMIN_USERNAME:admin}` | 同上 |
-| `smt.security.admin.password` | `${SMT_ADMIN_PASSWORD:dev-only-admin}` | 同上 |
+| `smt.security.admin.dev-hash` | `$2a$10$KI7jxWFMeXBVu7QfOoqmquVNgFmSs9dm7FE4UHa63qkm3IoqZWDeO`（`dev-only-admin` 的 BCrypt 哈希） | 同上 |
+| `smt.security.admin.password` | `${SMT_ADMIN_PASSWORD:${smt.security.admin.dev-hash}}`（嵌套占位符，详见 §4.4.8 说明） | 同上 |
 | `smt.opcua.publishing-interval-ms` | `100` | 同上 |
 | `smt.opcua.sampling-interval-ms` | `50` | 同上 |
 | `smt.opcua.queue-size` | `10` | 同上 |

@@ -27,6 +27,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 
 /**
@@ -130,7 +133,7 @@ public class OpcUaSubscriber {
         OpcUaClient client = clients.remove(endpointUrl);
         if (client != null) {
             try {
-                client.disconnect().get();
+                client.disconnect().get(30, TimeUnit.SECONDS);
                 log.info("OPC UA 连接已关闭 endpoint={}", endpointUrl);
             } catch (Exception e) {
                 log.error("OPC UA 连接关闭失败 endpoint={} 原因={}", endpointUrl, e.getMessage(), e);

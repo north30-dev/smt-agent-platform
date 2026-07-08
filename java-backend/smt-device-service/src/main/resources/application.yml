@@ -90,9 +90,13 @@ smt:
       prefix: "Bearer "
       expiry-seconds: 86400
     # Phase 1 单用户管理员凭据，Phase 2 接 DB 用户表（dev 默认值便于本地启动）
+    # password 为 BCrypt 哈希（dev 登录凭据：admin / dev-only-admin，生产由 ENV SMT_ADMIN_PASSWORD 覆盖）
+    # 注意：BCrypt 哈希含 $ 字符，不能直接放入 ${} 默认值（会被 Spring 占位符解析器处理），
+    # 故先用 dev-hash 明文属性存放哈希，再通过嵌套占位符 ${smt.security.admin.dev-hash} 引用
     admin:
       username: ${SMT_ADMIN_USERNAME:admin}
-      password: ${SMT_ADMIN_PASSWORD:dev-only-admin}
+      dev-hash: $2a$10$KI7jxWFMeXBVu7QfOoqmquVNgFmSs9dm7FE4UHa63qkm3IoqZWDeO
+      password: ${SMT_ADMIN_PASSWORD:${smt.security.admin.dev-hash}}
   # OPC UA 采样参数配置化（P0-6），默认值符合 PRD <100ms 契约
   opcua:
     publishing-interval-ms: ${SMT_OPCUA_PUBLISHING_INTERVAL_MS:100}

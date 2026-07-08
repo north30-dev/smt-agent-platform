@@ -1,9 +1,9 @@
 """订单与排产计划 PostgreSQL 存储。
 
-使用 asyncpg 连接池，复用 shared.doc_meta_store 的模式：
-- 模块级 _pool 懒初始化；
+使用 asyncpg 连接池，复用 shared.db 的公共连接池：
+- shared.db.get_pg_pool() 双重检查 + asyncio.Lock 懒初始化；
 - 多副本部署时共享同一 PG 实例；
-- close_pool() 仅供测试使用。
+- close_pool() 仅供测试使用，委托 shared.db.close_pool。
 
 涉及两张表：
 - production_orders：订单数据
@@ -16,27 +16,8 @@ from datetime import datetime, timezone
 
 import asyncpg
 
-from shared.config import settings
-
-# 模块级连接池（懒初始化）
-_pool: asyncpg.Pool | None = None
-
-
-async def _get_pool() -> asyncpg.Pool:
-    """懒初始化 asyncpg 连接池。"""
-    global _pool
-    if _pool is not None:
-        return _pool
-    _pool = await asyncpg.create_pool(
-        host=settings.postgres_host,
-        port=settings.postgres_port,
-        database=settings.postgres_db,
-        user=settings.postgres_user,
-        password=settings.postgres_password,
-        min_size=1,
-        max_size=5,
-    )
-    return _pool
+from shared.db import close_pool as _shared_close_pool
+from shared.db import get_pg_pool
 
 
 async def save_order(
@@ -67,7 +48,7 @@ async def save_order(
         asyncpg.exceptions.UniqueViolationError: order_no 已存在（由调用方处理）。
     """
     delivery = _parse_date(delivery_date)
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "INSERT INTO production_orders "
@@ -95,7 +76,7 @@ async def list_orders(status: str | None = None) -> list[dict]:
     Returns:
         按 delivery_date 升序排列的订单 dict 列表，字段名与数据库列名一致。
     """
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         if status:
             rows = await conn.fetch(
@@ -121,7 +102,7 @@ async def update_order_status(order_id: int, status: str) -> None:
         order_id: 订单 ID。
         status: 新状态（如 "PLANNED"）。
     """
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         await conn.execute(
             "UPDATE production_orders SET status = $1, updated_at = $2 "
@@ -148,7 +129,7 @@ async def save_plan(
     Returns:
         新生成的 plan_id。
     """
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
             # 归档既有 ACTIVE 计划
@@ -174,7 +155,7 @@ async def get_current_plan() -> dict | None:
     Returns:
         含 plan_id/plan_version/allocations/description/status/created_at 的 dict。
     """
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT plan_id, plan_version, allocations, description, status, "
@@ -188,7 +169,7 @@ async def get_current_plan() -> dict | None:
 
 async def get_next_plan_version() -> int:
     """查询下一个计划版本号（MAX(plan_version)+1）。"""
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT COALESCE(MAX(plan_version), 0) + 1 AS next_version "
@@ -198,11 +179,8 @@ async def get_next_plan_version() -> int:
 
 
 async def close_pool() -> None:
-    """关闭连接池（仅供测试使用）。"""
-    global _pool
-    if _pool is not None:
-        await _pool.close()
-        _pool = None
+    """关闭连接池（仅供测试使用，委托 shared.db.close_pool）。"""
+    await _shared_close_pool()
 
 
 # ---------------------------------------------------------------------------

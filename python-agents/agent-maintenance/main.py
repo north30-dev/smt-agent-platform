@@ -4,6 +4,8 @@
 对外路径前缀 /v1/maintenance/**（经 smt-gateway StripPrefix=2 后落地本服务）。
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
@@ -24,10 +26,30 @@ from .models import (
     PredictResponse,
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：shutdown 时关闭共享 httpx 客户端（RES-1）。"""
+    yield
+    try:
+        from shared.llm_client import aclose as _aclose_llm
+
+        await _aclose_llm()
+    except Exception as exc:
+        logger.warning("shutdown: close llm_client failed", error=str(exc))
+    try:
+        from shared.device_client import aclose as _aclose_device
+
+        await _aclose_device()
+    except Exception as exc:
+        logger.warning("shutdown: close device_client failed", error=str(exc))
+
+
 app = FastAPI(
     title="SMT 设备运维 Agent",
     description="设备故障诊断、健康评估与预测性维护服务。",
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 setup_logging(settings.log_level)

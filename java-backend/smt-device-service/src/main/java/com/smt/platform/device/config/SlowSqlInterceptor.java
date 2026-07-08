@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.sql.Connection;
 import java.sql.Statement;
 import java.util.Properties;
 
@@ -26,8 +25,8 @@ import java.util.Properties;
  * <p>阈值默认 100ms，可通过配置项 {@code smt.observation.slow-sql-threshold-ms} 覆盖。</p>
  */
 @Intercepts({
-        @Signature(type = StatementHandler.class, method = "prepare",
-                args = {Connection.class, Integer.class}),
+        @Signature(type = StatementHandler.class, method = "update",
+                args = {Statement.class}),
         @Signature(type = StatementHandler.class, method = "query",
                 args = {Statement.class, ResultHandler.class})
 })

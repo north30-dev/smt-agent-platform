@@ -1,5 +1,6 @@
 -- Phase 3 数据库 Schema
 -- 集中维护 Phase 3 新增的 quality_alerts、production_orders、production_plans 三张表 DDL
+-- 以及 REL-1 新增的 workflows 工作流持久化表
 -- 在 PostgreSQL 中执行：psql -U smt -d smt -f shared/db_schema.sql
 
 -- 质量告警记录表（agent-quality 写入）
@@ -46,3 +47,13 @@ CREATE TABLE IF NOT EXISTS production_plans (
 );
 CREATE INDEX IF NOT EXISTS idx_production_plans_status ON production_plans(status);
 CREATE INDEX IF NOT EXISTS idx_production_plans_created_at ON production_plans(created_at);
+
+-- 工作流持久化表（REL-1：orchestrator 从内存 dict 迁移到 PG）
+-- 由 shared/db.py 的 init_workflow_table() 幂等创建，此处保留 DDL 供手工初始化
+CREATE TABLE IF NOT EXISTS workflows (
+    workflow_id VARCHAR(64) PRIMARY KEY,
+    status VARCHAR(16) NOT NULL,
+    data JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_workflows_created_at ON workflows(created_at);

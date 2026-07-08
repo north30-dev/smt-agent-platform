@@ -40,7 +40,7 @@ public class AuthController {
     @Value("${smt.security.admin.username}")
     private String adminUsername;
 
-    /** 已加密的 admin 密码（BCrypt），首次启动时由原始密码编码后比较 */
+    /** 已加密的 admin 密码（BCrypt 哈希），登录时用 PasswordEncoder.matches(raw, hash) 校验 */
     @Value("${smt.security.admin.password}")
     private String adminPasswordPlain;
 
@@ -58,7 +58,7 @@ public class AuthController {
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody LoginRequest request) {
         if (!adminUsername.equals(request.getUsername())
-                || !adminPasswordPlain.equals(request.getPassword())) {
+                || !passwordEncoder.matches(request.getPassword(), adminPasswordPlain)) {
             throw new BadCredentialsException("用户名或密码错误");
         }
         // Phase 1 单用户固定 ADMIN 角色

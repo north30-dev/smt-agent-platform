@@ -216,3 +216,13 @@ def reset_agent_clients() -> None:
     global agent_clients
     if agent_clients._owns_client:
         agent_clients._client = None
+
+
+async def aclose() -> None:
+    """关闭单例的内部 HTTP 客户端（供 FastAPI lifespan shutdown 调用）。
+
+    幂等：客户端未创建或已关闭时直接返回。
+    """
+    if agent_clients._client is not None:
+        await agent_clients._client.aclose()
+        agent_clients._client = None
