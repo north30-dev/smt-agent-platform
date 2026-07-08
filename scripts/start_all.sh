@@ -93,17 +93,19 @@ fi
 info "前置依赖检查通过 ✓"
 
 # ========== 1. 启动中间件 ==========
-info "启动中间件（跳过 Kafka/Zookeeper 以避免 429）..."
+info "启动中间件..."
 cd "$PROJECT_ROOT/docker-compose"
-docker compose up -d postgres redis mosquitto influxdb etcd minio milvus 2>&1 | tail -5
+docker compose up -d postgres redis mosquitto influxdb etcd minio milvus zookeeper kafka 2>&1 | tail -5
 cd "$PROJECT_ROOT"
 
 info "等待中间件就绪..."
-wait_for_port "$PG_PORT"     30 "PostgreSQL"   || exit 1
-wait_for_port "$REDIS_PORT"  15 "Redis"         || exit 1
-wait_for_port "$MQTT_PORT"   15 "Mosquitto"     || exit 1
-wait_for_port "$INFLUX_PORT" 15 "InfluxDB"      || exit 1
-wait_for_port "$MILVUS_PORT" 30 "Milvus"        || exit 1
+wait_for_port "$PG_PORT"         30 "PostgreSQL"   || exit 1
+wait_for_port "$REDIS_PORT"      15 "Redis"         || exit 1
+wait_for_port "$MQTT_PORT"       15 "Mosquitto"     || exit 1
+wait_for_port "$INFLUX_PORT"     15 "InfluxDB"      || exit 1
+wait_for_port "$MILVUS_PORT"     30 "Milvus"        || exit 1
+wait_for_port "$ZOOKEEPER_PORT"  15 "Zookeeper"     || exit 1
+wait_for_port "$KAFKA_PORT"      30 "Kafka"         || exit 1
 
 # ========== 2. 初始化数据库 ==========
 info "初始化数据库（Schema + 测试设备）..."
@@ -207,6 +209,8 @@ echo "    Redis        : $HOST:$REDIS_PORT"
 echo "    Mosquitto    : $HOST:$MQTT_PORT"
 echo "    InfluxDB     : $HOST:$INFLUX_PORT"
 echo "    Milvus       : $HOST:$MILVUS_PORT"
+echo "    Zookeeper    : $HOST:$ZOOKEEPER_PORT"
+echo "    Kafka        : $HOST:$KAFKA_PORT"
 echo "  应用服务："
 echo "    device-service  : http://$HOST:$JAVA_PORT"
 echo "    scheduler       : http://$HOST:$SCHEDULER_PORT"

@@ -22,11 +22,11 @@ cd "$PROJECT_ROOT/docker-compose"
 if ss -tln 2>/dev/null | grep -q ":$PG_PORT "; then
     echo "中间件已运行 ✓"
 else
-    echo "[WARN] 中间件未运行，启动中间件（跳过 Kafka/Zookeeper 以避免 429）..."
-    docker compose up -d postgres redis mosquitto influxdb etcd minio milvus 2>&1 | tail -5
+    echo "[WARN] 中间件未运行，启动中间件..."
+    docker compose up -d postgres redis mosquitto influxdb etcd minio milvus zookeeper kafka 2>&1 | tail -5
     echo "等待中间件就绪..."
-    for i in $(seq 1 30); do
-        if ss -tln 2>/dev/null | grep -q ":$PG_PORT "; then break; fi
+    for i in $(seq 1 60); do
+        if ss -tln 2>/dev/null | grep -q ":$PG_PORT " && ss -tln 2>/dev/null | grep -q ":$KAFKA_PORT "; then break; fi
         sleep 1
     done
 fi

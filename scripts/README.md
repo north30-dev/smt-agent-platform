@@ -112,7 +112,7 @@ bash scripts/start_all.sh
 |------|----------------|------------------|
 | 适用场景 | 全新环境/服务全部未启动 | 服务已运行过，仅重启 |
 | 前置依赖检查 | ✓ 检查 docker/mvn/uv/curl | ✗ |
-| 中间件启动 | ✓ 按需启动（跳过 Kafka） | ✓ down + up |
+| 中间件启动 | ✓ 按需启动（含 Kafka/Zookeeper） | ✓ down + up |
 | 等待中间件就绪 | ✓ TCP 端口探测 | ✗ 立即启动应用 |
 | 数据库初始化 | ✓ 调用 init_db.sh | ✗ |
 | Milvus 初始化 | ✓ init_collections | ✗ |
@@ -122,8 +122,8 @@ bash scripts/start_all.sh
 **执行步骤**：
 
 1. **前置依赖检查** — 检查 docker、mvn、uv、curl 是否安装，Docker daemon 是否运行
-2. **启动中间件** — `docker compose up -d`（跳过 Kafka/Zookeeper 避免镜像 429）
-3. **等待中间件就绪** — TCP 端口探测：PostgreSQL (5432)、Redis (6379)、Mosquitto (1883)、InfluxDB (8086)、Milvus (19530)
+2. **启动中间件** — `docker compose up -d`（含 Kafka/Zookeeper）
+3. **等待中间件就绪** — TCP 端口探测：PostgreSQL (5432)、Redis (6379)、Mosquitto (1883)、InfluxDB (8086)、Milvus (19530)、Zookeeper (2181)、Kafka (9092)
 4. **初始化数据库** — 调用 `init_db.sh` 创建 Phase 3 表 + 插入测试设备
 5. **初始化 Milvus** — 调用 `vector_store.init_collections(1024)` 创建 3 个 collection
 6. **启动 Java 后端** — `mvn -pl smt-device-service spring-boot:run`（后台），等待 `/actuator/health` 返回 `UP`
@@ -139,11 +139,12 @@ bash scripts/start_all.sh
 
 ```
 [INFO]  检查前置依赖检查通过 ✓
-[INFO]  启动中间件（跳过 Kafka/Zookeeper 以避免 429）...
+[INFO]  启动中间件...
 [INFO]  等待中间件就绪...
 [INFO]  PostgreSQL (端口 5432) 已就绪（3s）
 [INFO]  Redis (端口 6379) 已就绪（1s）
 [INFO]  Milvus (端口 19530) 已就绪（10s）
+[INFO]  Kafka (端口 9092) 已就绪（8s）
 [INFO]  初始化数据库（Schema + 测试设备）...
 [INFO]  初始化 Milvus Collections...
 [INFO]  启动 Java 后端...
@@ -225,7 +226,7 @@ bash scripts/dev_restart.sh
 
 **执行步骤**：
 
-1. **重启中间件** — `cd docker-compose && docker-compose down && docker-compose up -d`
+1. **检查中间件** — 若 PostgreSQL 端口未监听，则 `docker compose up -d` 启动全部中间件（含 Kafka/Zookeeper）
 2. **[SKIP] C++ 原生层** — 暂未实现
 3. **Java 后端** — 启动 `smt-device-service` (8081) + `smt-gateway` (8080)
 4. **Python 智能体** — 启动 5 个 Agent：knowledge (8004)、maintenance (8002)、scheduler (8001)、quality (8003)、orchestrator (8005)
@@ -252,8 +253,7 @@ cd docker-compose && docker compose down
 ```
 
 **已知限制**：
-- Kafka/Zookeeper 可能因镜像源 429 未启动（Phase 3 不依赖 Kafka，可忽略）
-- `docker-compose` 命令使用 v1 语法，新版 Docker 建议改为 `docker compose`（v2）
+- 中间件需提前拉取镜像（`docker compose pull`），首次启动需联网
 
 ---
 
@@ -428,7 +428,6 @@ bash scripts/init_db.sh
 ## 注意事项
 
 1. **执行目录**：所有脚本必须在**项目根目录** `smt-agent-platform/` 下执行（脚本内已用 `PROJECT_ROOT` 自动定位，但相对路径仍需从根目录调用）
-2. **Docker Compose 版本**：`dev_restart.sh` 使用 `docker-compose`（v1），新版 Docker 建议改为 `docker compose`（v2）
-3. **Kafka 429 问题**：`dev_restart.sh` 启动中间件时若 Kafka/Zookeeper 镜像拉取失败（429），Phase 3 功能不受影响，可忽略
-4. **日志文件**：`dev_restart.sh` 会在 `logs/` 目录生成各服务的 `.log` 和 `.pid` 文件，可查看日志排查问题
-5. **端口冲突**：启动前请确保 8081、8001-8005、5432、6379、1883、8086、19530、9000-9001 端口未被占用
+2. **Docker Compose 版本**：脚本统一使用 `docker compose`（v2），不再兼容 `docker-compose`（v1）
+3. **日志文件**：`dev_restart.sh` 会在 `logs/` 目录生成各服务的 `.log` 和 `.pid` 文件，可查看日志排查问题
+4. **端口冲突**：启动前请确保 8081、8001-8005、5432、6379、1883、8086、19530、9092、2181、9000-9001 端口未被占用
