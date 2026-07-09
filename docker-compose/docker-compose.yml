@@ -33,6 +33,7 @@ services:
       - "5432:5432"
     volumes:
       - smt-postgres-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SMT_DB_USERNAME:-smt} -d ${SMT_DB_NAME:-smt}"]
       interval: 10s
@@ -48,7 +49,7 @@ services:
     restart: unless-stopped
     command: ["sh", "-c", "redis-server --requirepass \"${SMT_REDIS_PASSWORD:-root}\" --appendonly yes"]
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - smt-redis-data:/data
     healthcheck:
@@ -61,12 +62,9 @@ services:
 
   # ===== Kafka 依赖：Zookeeper =====
   zookeeper:
-    image: bitnami/zookeeper:3.9
+    image: wurstmeister/zookeeper:3.4.6
     container_name: smt-zookeeper
     restart: unless-stopped
-    environment:
-      ALLOW_ANONYMOUS_LOGIN: "yes"
-      TZ: Asia/Shanghai
     ports:
       - "2181:2181"
     healthcheck:
@@ -79,7 +77,7 @@ services:
 
   # ===== 消息队列：Kafka =====
   kafka:
-    image: bitnami/kafka:3.7
+    image: wurstmeister/kafka:2.13-2.7.1
     container_name: smt-kafka
     restart: unless-stopped
     depends_on:
@@ -88,15 +86,11 @@ services:
     ports:
       - "9092:9092"
     environment:
-      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
-      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CREATE_TOPICS: "smt-device-telemetry:1:1,smt-alarm-events:1:1"
       TZ: Asia/Shanghai
-    volumes:
-      - smt-kafka-data:/bitnami/kafka
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || exit 1"]
       interval: 15s
@@ -120,7 +114,7 @@ services:
       TZ: Asia/Shanghai
     healthcheck:
       # 通过订阅 $SYS 主题验证 broker 已就绪；-W 3 限定 3 秒超时，避免 healthcheck 长时间挂起
-      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -t '$$SYS/#' -C 1 -W 3 >/dev/null 2>&1 || exit 0"]
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -t '$$SYS/#' -C 1 -W 3 >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -235,7 +229,6 @@ services:
 volumes:
   smt-postgres-data:
   smt-redis-data:
-  smt-kafka-data:
   smt-etcd-data:
   smt-minio-data:
   smt-milvus-data:

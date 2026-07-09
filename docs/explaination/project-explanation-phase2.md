@@ -46,7 +46,7 @@
 | 1 | docker-compose 追加 Milvus + etcd + minio + InfluxDB，19530/8086 端口暴露，含健康检查 + 三网络隔离 | ✅ | 既有 PG/Redis/Kafka/Mosquitto 定义未修改；凭据环境变量化 |
 | 2 | `docker-compose/.env.example` 追加 Milvus + InfluxDB 相关占位变量 | ✅ | 无硬编码密码 |
 | 3 | `pyproject.toml` Poetry + Python 3.12 依赖清单完整 | ✅ | langchain 已移除；新增 asyncpg/tenacity/structlog |
-| 4 | `python-agents/.env.example` 占位完整 | ✅ | 新增 postgres_* / predict_* / retry 配置 |
+| 4 | `python-agents/.env.example` 占位完整 | ✅ | 修复批次中已全量重写，覆盖 Settings 全部字段（POSTGRES_* / LLM_* / DEVICE_SERVICE_* / MILVUS_* / HTTP_* / PREDICT_* / LOG_LEVEL / QUALITY_* / SCHEDULER_* / AGENT_*_BASE_URL） |
 | 5 | `python-agents/README.md` 端口映射与启动说明 | ✅ | 8002 / 8004 双 Agent |
 | 6 | `.gitignore` 忽略 `.env`、`.venv/`、`__pycache__/` | ✅ | |
 | 7 | `shared/llm_client.py` 暴露 `achat` / `aembed`，全 async + AsyncClient + tenacity 重试 | ✅ | 源码无 API_KEY 硬编码；模块级共享客户端实例 |
@@ -68,7 +68,7 @@
 | 23 | `agent-maintenance/main.py` FastAPI 4 接口 + /v1/ 前缀 + async + /healthz + structlog | ✅ | |
 | 24 | `agent-maintenance/models.py` Pydantic 模型（ErrorResponse 抽取到 shared） | ✅ | |
 | 25 | `tests/test_maintenance_*.py` 全绿（diagnose + predict + api，predict 扩至 20 用例） | ✅ | |
-| 26 | smt-gateway 新增 `/api/agent/knowledge/**` 与 `/api/agent/maintenance/**` 路由 + AgentAuthWebFilter | ✅ | StripPrefix=2，地址 ENV 化，JWT 鉴权 |
+| 26 | smt-gateway 新增 `/api/agent/knowledge/**` 与 `/api/agent/maintenance/**` 路由 + AgentAuthWebFilter | ✅ | StripPrefix=2，地址 ENV 化，JWT 鉴权；修复批次已将谓词路径改为 `/api/agent/v1/<module>/**`（详见 §4.5） |
 | 27 | `mvn -pl smt-gateway compile` 通过，既有路由不破坏 | ✅ | |
 | 28 | `api-contracts/openapi/agent_api.yaml` OpenAPI 3.0 覆盖 8 接口 | ✅ | 与 Python 实现对齐 |
 | 29 | `scripts/build_all.sh` 含 Python 段 `poetry install` | ✅ | |
@@ -155,8 +155,8 @@ graph TB
         LLM["通义千问 / DeepSeek<br/>OpenAI 兼容接口"]
     end
 
-    Client -->|"HTTP /api/agent/knowledge/**"| GW
-    Client -->|"HTTP /api/agent/maintenance/**"| GW
+    Client -->|"HTTP /api/agent/v1/knowledge/**"| GW
+    Client -->|"HTTP /api/agent/v1/maintenance/**"| GW
     Client -->|"HTTP /api/device/**"| GW
     GW --> AuthFilter
     AuthFilter -->|"StripPrefix=2 → /v1/knowledge/**"| AK
@@ -176,12 +176,11 @@ graph TB
     DS -->|"Paho 订阅"| MQTT
     DS -->|"@Cacheable"| Redis
     DS -->|"InfluxDB 双写"| InfluxDB
-    DS -.->|"声明未用"| Kafka
+    DS -->|"Phase 4 待接入"| Kafka
 
     Milvus ---|元数据| Etcd
     Milvus ---|对象存储| Minio
 
-    style Kafka fill:#ffe,stroke:#999,stroke-dasharray: 5 5
 ```
 
 ### 3.3 技术栈选型
@@ -332,7 +331,7 @@ sequenceDiagram
         AK->>Mil: vector_store.init_collections(dim)
     end
     AK->>Mil: vector_store.insert(smt_knowledge, doc_id, chunks, vectors)
-    AK->>PG: doc_meta_store.save_doc_meta(doc_id, filename)<br/>[asyncpg UPSERT，替换原文件写入]
+    AK->>PG: doc_meta_store.save_doc_meta(doc_id, filename)<br/>[asyncpg UPSERT，替换原文件写入；连接池通过 shared/db.py 统一管理]
     AK-->>GW: 200 {doc_id, doc_name, chunk_count}
     GW-->>FE: 透传响应
 ```
@@ -375,7 +374,8 @@ sequenceDiagram
 | `config.py` | `pydantic-settings` 加载 `.env` 导出 `settings` 单例（含 postgres_*/predict_*/retry/log_level） | [`config.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/config.py) |
 | `llm_client.py` | 统一大模型调用出口：`achat(messages)` + `aembed(texts)`；AsyncClient + 模块级共享实例 + tenacity AsyncRetrying（429/5xx 重试） | [`llm_client.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/llm_client.py) |
 | `vector_store.py` | Milvus 封装：`init_collections` / `insert` / `search` / `delete_by_doc` / `list_docs` / `count`；threading.Lock + query_iterator 分页 + tenacity Retrying | [`vector_store.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/vector_store.py) |
-| `doc_meta_store.py` | asyncpg 连接池 + 文档元数据 CRUD（save_doc_meta / list_doc_meta / remove_doc_meta） | [`doc_meta_store.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/doc_meta_store.py) |
+| `doc_meta_store.py` | asyncpg 文档元数据 CRUD（连接池从 shared/db.py 获取，asyncio.Lock 保护）；save_doc_meta / list_doc_meta / remove_doc_meta | [`doc_meta_store.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/doc_meta_store.py) |
+| `db.py` | PostgreSQL 连接池公共模块（asyncio.Lock + 懒初始化），被 doc_meta_store / order_store / alert_store 共用 | [`db.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db.py)（修复批次新增） |
 | `observability.py` | structlog 配置 + get_logger + /healthz 端点注册（HealthCheck/HealthResponse） | [`observability.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/observability.py) |
 | `models.py` | 共享 ErrorResponse（error + message），消除两 Agent 重复定义 | [`models.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/models.py) |
 | `prompts/system_prompt.yaml` | knowledge + maintenance 两套中文角色 Prompt | [`system_prompt.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/prompts/system_prompt.yaml) |
@@ -429,7 +429,7 @@ sequenceDiagram
 
 **主要特性**：
 
-- **健康分析**：`health_score ≥ 85` LOW / `≥ 60` MEDIUM / `< 60` HIGH；非数字 healthScore 抛 DeviceServiceUnavailable → 503
+- **健康分析**：`health_score ≥ 85` LOW / `≥ 60` MEDIUM / `< 60` HIGH（阈值已从硬编码提取到 `shared/config.py` 的 `maintenance_risk_low` / `maintenance_risk_medium` 配置项）；非数字 healthScore 抛 DeviceServiceUnavailable → 503
 - **故障诊断**：检索 Top-3 相似案例 → 拼 prompt → 追加 JSON 输出约束 → LLM 推理 → 三级降级解析（`json.loads` → ```` ```json ```` `` 块提取 → 正则 fallback → 整段文本）
 - **预测性维护 v1**（spec 已显式裁剪，未达 PRD §4.2 "提前 14 天预警" P0）：
   - 阈值配置化（settings.predict_temp_max / predict_vib_max / predict_default_max）
@@ -444,15 +444,15 @@ sequenceDiagram
 | 配置项 | 值 | 文件 |
 |---|---|---|
 | `/api/device/**` → device-service | `http://${SMT_DEVICE_SERVICE_HOST:localhost}:${SMT_DEVICE_SERVICE_PORT:8081}` | [`application.yml`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-gateway/src/main/resources/application.yml) |
-| `/api/agent/knowledge/**` → agent-knowledge | `http://${SMT_AGENT_KNOWLEDGE_HOST:localhost}:${SMT_AGENT_KNOWLEDGE_PORT:8004}` | 同上 |
-| `/api/agent/maintenance/**` → agent-maintenance | `http://${SMT_AGENT_MAINTENANCE_HOST:localhost}:${SMT_AGENT_MAINTENANCE_PORT:8002}` | 同上 |
+| `/api/agent/v1/knowledge/**` → agent-knowledge | `http://${SMT_AGENT_KNOWLEDGE_HOST:localhost}:${SMT_AGENT_KNOWLEDGE_PORT:8004}` | 同上 |
+| `/api/agent/v1/maintenance/**` → agent-maintenance | `http://${SMT_AGENT_MAINTENANCE_HOST:localhost}:${SMT_AGENT_MAINTENANCE_PORT:8002}` | 同上 |
 | `AgentAuthWebFilter` | 仅拦截 `/api/agent/**`，校验 Bearer token，无效返回 401 | [`AgentAuthWebFilter.java`](file:///home/north30/projects/Personal/smt-agent-platform/java-backend/smt-gateway/src/main/java/com/smt/platform/gateway/security/AgentAuthWebFilter.java) |
 
 ### 4.6 API 契约
 
 | 文件 | 说明 |
 |---|---|
-| [`api-contracts/openapi/agent_api.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/api-contracts/openapi/agent_api.yaml) | OpenAPI 3.0.3，覆盖 knowledge 4 接口 + maintenance 4 接口 |
+| [`api-contracts/openapi/agent_api.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/api-contracts/openapi/agent_api.yaml) | OpenAPI 3.0.3，覆盖 knowledge 4 接口 + maintenance 4 接口；KnowledgeSource.chunk_id 类型已统一为 integer（与 Milvus INT64 对齐） |
 | [`api-contracts/openapi/device_api.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/api-contracts/openapi/device_api.yaml) | Phase 1 既有，未修改 |
 
 ### 4.7 测试覆盖
@@ -479,6 +479,7 @@ sequenceDiagram
 
 - RAG < 3s 性能断言基于 mock 链路，未包含真实 LLM/Milvus 网络延迟
 - Python 综合覆盖率 77.88%；Java 综合覆盖率 36.2%（smt-common 6.5% 偏低）
+- 修复批次后实测：Java 57 用例 0 失败；Python 175 passed、1 pre-existing failure（LLM_API_KEY 环境未配置）、2 skipped；集成测试 11/12 通过（1 项预期失败：LM Studio 鉴权，属 SEC-4 设计）
 - smt-gateway 路由零集成测试
 
 ---
@@ -541,6 +542,7 @@ python-agents/
 │   ├── [llm_client.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/llm_client.py)                   achat() + aembed() 统一出口（AsyncClient + tenacity）
 │   ├── [vector_store.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/vector_store.py)                 Milvus insert/search/delete/list/count（Lock + query_iterator + tenacity）
 │   ├── [doc_meta_store.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/doc_meta_store.py)               asyncpg 文档元数据 CRUD
+│   ├── [db.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db.py)                       PostgreSQL 连接池公共模块（asyncio.Lock + 懒初始化，被 doc_meta_store / order_store / alert_store 共用）
 │   ├── [observability.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/observability.py)                structlog + /healthz
 │   ├── [models.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/models.py)                     共享 ErrorResponse
 │   └── prompts/
@@ -585,6 +587,7 @@ graph TB
         LLM["llm_client<br/>achat + aembed"]
         VS["vector_store<br/>insert + search + delete + list + count"]
         DMS["doc_meta_store<br/>save + list + remove"]
+        DB["db.py<br/>get_pg_pool()"]
         Obs["observability<br/>structlog + /healthz"]
         SModels["models.ErrorResponse"]
         Prompt["prompts/system_prompt.yaml"]
@@ -640,7 +643,8 @@ graph TB
 
     LLM -->|"AsyncClient"| LLM_API
     VS -->|pymilvus| Mil
-    DMS -->|asyncpg| PG
+    DMS --> DB
+    DB -->|"asyncpg 连接池"| PG
     Cfg --> LLM
     Cfg --> VS
     Cfg --> DMS
@@ -837,20 +841,20 @@ POST /api/agent/maintenance/diagnose
 
 ```bash
 # 中间件（含 Phase 2 新增 Milvus + InfluxDB + 三网络隔离）
-cd docker-compose && docker-compose up -d
+cd docker-compose && docker compose up -d
 
 # Python 智能体依赖安装
-cd python-agents && poetry install
+cd python-agents && uv install
 
 # Python 单 Agent 运行
-cd python-agents && poetry run uvicorn agent-knowledge.main:app --port 8004 --reload
-cd python-agents && poetry run uvicorn agent-maintenance.main:app --port 8002 --reload
+cd python-agents && uv run uvicorn agent-knowledge.main:app --port 8004 --reload
+cd python-agents && uv run uvicorn agent-maintenance.main:app --port 8002 --reload
 
 # Python 全量测试
-cd python-agents && poetry run pytest
+cd python-agents && uv run pytest
 
 # Python 仅单元测试（排除 contract/slow/integration）
-cd python-agents && poetry run pytest -m "not contract and not slow and not integration"
+cd python-agents && uv run pytest -m "not contract and not slow and not integration"
 
 # Java 全量编译与测试
 cd java-backend && mvn clean install -DskipTests
@@ -906,7 +910,7 @@ bash scripts/dev_restart.sh
 | PostgreSQL | 5432 | Phase 1 | 关系库 |
 | Redis | 6379 | Phase 1 | 缓存（已用） |
 | Zookeeper | 2181 | Phase 1 | Kafka 依赖 |
-| Kafka | 9092 | Phase 1 | 消息队列（声明未用） |
+| Kafka | 9092 | Phase 1 | 消息队列（Phase 4 事件驱动待接入） |
 | Mosquitto | 1883 | Phase 1 | MQTT Broker |
 | etcd | 2379 | Phase 2 | Milvus 元数据 |
 | Minio | 9000 / 9001 | Phase 2 | Milvus 对象存储 |

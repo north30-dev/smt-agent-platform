@@ -2,7 +2,7 @@
 # 一键全量构建：C++ → Java → Python
 # 用法: bash scripts/build_all.sh
 
-set -e
+set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"

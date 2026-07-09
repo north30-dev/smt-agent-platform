@@ -7,8 +7,11 @@ import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.model.vo.PageVO;
 import com.smt.platform.device.service.DeviceService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Positive;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -74,8 +77,8 @@ public class DeviceController {
     /** 分页查询设备列表，支持按产线/类型/状态筛选 */
     @GetMapping("/list")
     public Result<PageVO<Device>> list(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "1") @Positive int page,
+            @RequestParam(defaultValue = "10") @Positive @Max(200) int size,
             @RequestParam(required = false) String productionLine,
             @RequestParam(required = false) String deviceType,
             @RequestParam(required = false) String status) {

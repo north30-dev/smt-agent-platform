@@ -6,34 +6,12 @@
 
 from datetime import datetime, timezone
 
-import asyncpg
-
-from shared.config import settings
-
-# 模块级连接池（懒初始化）
-_pool: asyncpg.Pool | None = None
-
-
-async def _get_pool() -> asyncpg.Pool:
-    """懒初始化 asyncpg 连接池。"""
-    global _pool
-    if _pool is not None:
-        return _pool
-    _pool = await asyncpg.create_pool(
-        host=settings.postgres_host,
-        port=settings.postgres_port,
-        database=settings.postgres_db,
-        user=settings.postgres_user,
-        password=settings.postgres_password,
-        min_size=1,
-        max_size=5,
-    )
-    return _pool
+from shared.db import get_pg_pool
 
 
 async def save_doc_meta(doc_id: str, doc_name: str) -> None:
     """插入或更新文档元数据（UPSERT）。"""
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO doc_meta (doc_id, doc_name, create_time) VALUES ($1, $2, $3) "
@@ -46,7 +24,7 @@ async def save_doc_meta(doc_id: str, doc_name: str) -> None:
 
 async def list_doc_meta() -> dict[str, dict]:
     """返回 {doc_id: {doc_name, create_time}}。"""
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT doc_id, doc_name, create_time FROM doc_meta"
@@ -64,6 +42,6 @@ async def list_doc_meta() -> dict[str, dict]:
 
 async def remove_doc_meta(doc_id: str) -> None:
     """删除指定 doc_id 的元数据。"""
-    pool = await _get_pool()
+    pool = await get_pg_pool()
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM doc_meta WHERE doc_id = $1", doc_id)

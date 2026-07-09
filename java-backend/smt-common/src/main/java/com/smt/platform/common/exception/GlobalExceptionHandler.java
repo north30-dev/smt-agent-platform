@@ -2,6 +2,7 @@ package com.smt.platform.common.exception;
 
 import com.smt.platform.common.response.Result;
 import com.smt.platform.common.response.ResultCode;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -148,9 +149,10 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(NoHandlerFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Result<Void> handleNoHandlerFound(NoHandlerFoundException e) {
-        log.warn("路径不存在: {}", e.getRequestURL());
-        return Result.error(ResultCode.NOT_FOUND, "请求路径不存在: " + e.getRequestURL());
+    public Result<Void> handleNoHandlerFound(NoHandlerFoundException e, HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        log.warn("路径不存在: {}", uri);
+        return Result.error(ResultCode.NOT_FOUND, "请求路径不存在: " + uri);
     }
 
     /**

@@ -1,7 +1,7 @@
 [project]
 name = "smt-python-agents"
 version = "0.2.0"
-description = "SMT 贴片产线智能运维平台 - Python 智能体层（Phase 2：知识助手 Agent + 设备运维 Agent）"
+description = "SMT 贴片产线智能运维平台 - Python 智能体层（Phase 2：知识助手 Agent + 设备运维 Agent；Phase 3：质量分析 Agent + 调度 Agent + LangGraph 编排）"
 authors = [{name = "north30-dev", email = "north30dev@163.com"}]
 readme = "README.md"
 requires-python = ">=3.12"
@@ -19,6 +19,8 @@ dependencies = [
     "asyncpg>=0.29.0",
     "tenacity>=8.2.0",
     "structlog>=24.1.0",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
 ]
 
 [dependency-groups]
@@ -43,7 +45,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["agent_knowledge", "agent_maintenance", "shared"]
+source = ["agent-knowledge", "agent-maintenance", "agent-quality", "agent-scheduler", "agent-orchestrator", "shared"]
 omit = ["tests/*", "*/__init__.py"]
 
 [tool.coverage.report]

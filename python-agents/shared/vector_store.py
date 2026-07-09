@@ -4,6 +4,7 @@
 提供 collection 初始化、批量插入、向量检索、按文档删除、文档列表、条数统计等同步能力。
 """
 
+import re
 import threading
 
 from pymilvus import (
@@ -30,7 +31,24 @@ class VectorStoreError(Exception):
 
 
 # 受管理的 collection 名称
-COLLECTIONS = ("smt_knowledge", "smt_fault_cases")
+COLLECTIONS = ("smt_knowledge", "smt_fault_cases", "smt_quality_cases")
+
+# doc_id 白名单：字母、数字、下划线、连字符、冒号
+# 防止 doc_id 拼接到 Milvus filter 表达式时引发注入
+_DOC_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-:]+$")
+
+
+def _validate_doc_id(doc_id: str) -> None:
+    """校验 doc_id 仅含白名单字符，防止 filter 表达式注入。
+
+    Raises:
+        VectorStoreError: doc_id 为空或含非法字符。
+    """
+    if not doc_id or not _DOC_ID_PATTERN.match(doc_id):
+        raise VectorStoreError(
+            f"doc_id 含非法字符或为空：{doc_id!r}（仅允许字母、数字、下划线、连字符、冒号）"
+        )
+
 
 # 模块级连接单例标志与保护锁（P0 B2：防止多线程并发 check-then-set 竞态）
 _connected = False
@@ -143,6 +161,7 @@ def insert(
         raise VectorStoreError("chunks 与 vectors 长度不一致")
     if not chunks:
         return 0
+    _validate_doc_id(doc_id)
     col = _get_collection(collection_name)
     ids = [f"{doc_id}_{i}" for i in range(len(chunks))]
     doc_ids = [doc_id] * len(chunks)
@@ -184,7 +203,10 @@ def search(
         [{doc_id, chunk_id, content, score}]，score 越高越相似。空库返回空列表。
     """
     col = _get_collection(collection_name)
-    expr = f'doc_id == "{doc_id}"' if doc_id else None
+    expr = None
+    if doc_id:
+        _validate_doc_id(doc_id)
+        expr = f'doc_id == "{doc_id}"'
     search_params = {"metric_type": "COSINE", "params": {"nprobe": 16}}
     try:
         results = col.search(
@@ -226,6 +248,7 @@ def delete_by_doc(collection_name: str, doc_id: str) -> int:
         删除条数。
     """
     col = _get_collection(collection_name)
+    _validate_doc_id(doc_id)
     expr = f'doc_id == "{doc_id}"'
     try:
         # 用 query_iterator 突破 pymilvus 默认 16384 上限（P0 M4）
@@ -273,10 +296,13 @@ def list_docs(collection_name: str) -> list[dict]:
 
 
 def count(collection_name: str) -> int:
-    """返回 collection 总条数，用于空库兜底判断。"""
+    """返回 collection 总条数，用于空库兜底判断。
+
+    使用 num_entities 而非 flush()，避免同步阻塞强制刷盘。
+    num_entities 可能略滞后于实际写入，但 count() 本就是估算，可接受。
+    """
     col = _get_collection(collection_name)
     try:
-        col.flush()
         return int(col.num_entities)
     except Exception as exc:
         raise VectorStoreError(

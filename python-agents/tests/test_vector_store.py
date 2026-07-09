@@ -36,11 +36,11 @@ def mock_milvus(monkeypatch):
 
 
 def test_init_collections(mock_milvus):
-    """两个 collection 均不存在时应创建并建立索引。"""
+    """三个 collection 均不存在时应创建并建立索引。"""
     vector_store.init_collections(768)
 
-    # 两个 collection 都调用过 Collection 构造
-    assert mock_milvus["collection_cls"].call_count == 2
+    # 三个 collection 都调用过 Collection 构造
+    assert mock_milvus["collection_cls"].call_count == 3
     # create_index 至少调用一次
     mock_milvus["col"].create_index.assert_called()
 

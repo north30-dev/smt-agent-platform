@@ -32,8 +32,8 @@
 
 ```bash
 cd docker-compose
-docker-compose up -d
-docker-compose down
+docker compose up -d
+docker compose down
 ```
 
 ### 2.2 C++ 原生层（最先编译）
@@ -80,8 +80,11 @@ npx tsc --noEmit   # 类型检查
 ### 2.6 一键脚本
 
 ```bash
-bash scripts/build_all.sh       # C++ → Java → Python 全量构建
+bash scripts/build_all.sh       # Java → Python 全量构建
+bash scripts/start_all.sh       # 启动所有本地服务
+bash scripts/api_integration_test.sh # 测试所有 API 接口
 bash scripts/dev_restart.sh     # 重启所有本地服务
+bash scripts/stop_all.sh        # 停止所有本地服务
 ```
 
 ***

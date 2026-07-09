@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from shared.config import settings
 
-from .device_client import DeviceServiceUnavailable, device_client
+from shared.device_client import DeviceServiceUnavailable, device_client
 
 
 async def predict(device_id: int) -> dict:

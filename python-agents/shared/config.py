@@ -60,6 +60,28 @@ class Settings(BaseSettings):
     # 可观测性
     log_level: str = "INFO"
 
+    # Phase 3：质量分析 Agent 阈值
+    quality_aoi_defect_rate_threshold: float = 0.02
+    quality_spi_solder_paste_volume_min: float = 50.0
+    quality_spi_solder_paste_volume_max: float = 150.0
+    quality_monitor_window_hours: int = 1
+    quality_alerts_page_size: int = 20
+
+    # Phase 3：调度智能体参数
+    scheduler_max_horizon_hours: int = 72
+    scheduler_changeover_minutes: int = 30
+    scheduler_device_min_health_score: int = 85
+    scheduler_capacity_per_hour: int = 1000
+
+    # Phase 3：Agent 编排（orchestrator）调用各子 Agent 的基地址
+    agent_maintenance_base_url: str = "http://localhost:8002"
+    agent_quality_base_url: str = "http://localhost:8003"
+    agent_scheduler_base_url: str = "http://localhost:8001"
+
+    # Phase 1 m：运维风险阈值
+    maintenance_risk_low: int = 85
+    maintenance_risk_medium: int = 60
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

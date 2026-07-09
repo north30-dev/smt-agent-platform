@@ -38,9 +38,9 @@ smt-agent-platform/                     # 【项目根目录】
 ├── docs/                               # 【项目文档】非代码资料
 │   ├── PRD.md                          # 产品需求文档（你之前写过的那份）
 │   ├── architecture/
-│   │   └── system_design.puml          # PlantUML架构图（四层架构+多智能体协作）
+│   │   └── system_design.puml          # PlantUML架构图（四层架构+多智能体协作）（Phase 4 待生成）
 │   └── database/
-│       └── er_diagram.puml             # 数据库ER图（设备/工单/质量表关系）
+│       └── er_diagram.puml             # 数据库ER图（设备/工单/质量表关系）（Phase 4 待生成）
 │
 ├── frontend/                           # 【前端可视化】（React + TypeScript）
 │   └── ...（详见下文第二节）
@@ -61,6 +61,8 @@ smt-agent-platform/                     # 【项目根目录】
 
 > **职责**：提供产线看板、设备监控、排产操作、知识问答等人机交互界面。  
 > **建议**：**你不必深入CSS/样式**，重点放在`services/`层（对接后端API）和`pages/`路由配置。
+
+> **状态说明**：本节列出的 `frontend/src/` 下所有文件（含 `main.tsx` / `App.tsx` / `pages/*` / `services/*` / `stores/*` / `components/*` / `layouts/*` / `utils/*`）当前均不存在，整个前端 src 目录为空（Phase 5 待创建）。下述结构为规划骨架，供 Phase 5 搭建时对照。
 
 ```text
 frontend/
@@ -139,7 +141,7 @@ java-backend/
 │       ├── mapper/                     # MyBatis-Plus Mapper（操作PostgreSQL设备表）
 │       └── model/                      # 实体类（Device, DeviceDataPoint）
 │
-├── smt-order-service/                  # 【工单服务】生产工单与排程结果管理
+├── smt-order-service/                  # 【工单服务】生产工单与排程结果管理（已移除：空目录待清理，调度由 agent-scheduler 承担）
 │   ├── pom.xml
 │   └── src/main/java/com/smt/platform/order/
 │       ├── controller/                 # 工单创建、进度上报
@@ -155,7 +157,7 @@ java-backend/
 │   └── src/main/java/com/smt/platform/notification/
 │       └── service/                    # 根据告警级别选择渠道推送
 │
-└── smt-agent-router/                   # 【AI路由中转】Java→Python的桥梁（gRPC客户端）
+└── smt-agent-router/                   # 【AI路由中转】Java→Python的桥梁（gRPC客户端）（已移除：网关 smt-gateway 直接 HTTP 转发，空目录待清理）
     ├── pom.xml
     └── src/main/java/com/smt/platform/router/
         ├── grpc/                       # 从api-contracts生成的gRPC Stub
@@ -187,18 +189,18 @@ python-agents/
 ├── agent-scheduler/                    # 【调度智能体】端口8001
 │   ├── __init__.py
 │   ├── main.py                         # FastAPI启动（路由：/schedule/optimize）
-│   └── tools/                          # 专属工具函数
-│       └── capacity_calculator.py      # 计算产线剩余产能
+│   └── tools/                          # 专属工具函数（实际无此目录，调度逻辑在 planner.py / urgent.py）
+│       └── capacity_calculator.py      # 计算产线剩余产能（实际无此文件）
 │
 ├── agent-maintenance/                  # 【运维智能体】端口8002
 │   ├── __init__.py
 │   ├── main.py                         # 接口：/maintenance/predict
-│   └── phm_model.py                    # 预测性维护算法（调用C++ .so库做信号处理）
+│   └── phm_model.py                    # 预测性维护算法（实际为 predict.py）
 │
 ├── agent-quality/                      # 【质量分析智能体】端口8003
 │   ├── __init__.py
 │   ├── main.py                         # 接口：/quality/root-cause
-│   └── root_cause_analyzer.py          # 基于知识图谱的根因定位
+│   └── root_cause_analyzer.py          # 基于知识图谱的根因定位（实际为 root_cause.py）
 │
 ├── agent-knowledge/                    # 【知识助手RAG】端口8004
 │   ├── __init__.py
@@ -207,13 +209,13 @@ python-agents/
 │   └── data/                           # 文档库（待向量化）
 │       └── manuals/                    # 设备操作手册（PDF/Word）
 │
-├── agent-execution/                    # 【执行协同智能体】端口8005
-│   ├── __init__.py
-│   └── main.py                         # 接口：/execution/dispatch（下发维修工单）
+├── agent-execution/                    # 【执行协同智能体】端口8005（已移除：orchestrator 取代，空目录待清理）
+│   ├── __init__.py                     # （已移除）
+│   └── main.py                         # 接口：/execution/dispatch（下发维修工单）（已移除）
 │
-├── protos/                             # 【gRPC生成代码】从api-contracts编译
-│   ├── __init__.py
-│   └── agent_service_pb2_grpc.py       # gRPC服务端/客户端骨架
+├── protos/                             # 【gRPC生成代码】从api-contracts编译（Phase 4 待生成）
+│   ├── __init__.py                     # （Phase 4 待生成）
+│   └── agent_service_pb2_grpc.py       # gRPC服务端/客户端骨架（Phase 4 待生成）
 │
 └── tests/                              # 单元测试
     └── test_llm_client.py
@@ -226,6 +228,8 @@ python-agents/
 > **职责**：工业协议解析（Modbus/S7）、高性能信号处理（FFT）—— **作为Python/Java的动态库**。  
 > **构建工具**：CMake（输出`.so`或`.dll`）  
 > **关键**：**只生成库文件，不生成可执行文件**。
+
+> **状态说明**：本节列出的 `cpp-native/` 下所有文件（含 `CMakeLists.txt` / `cmake/` / `include/` / `src/` / `third_party/` 内的 `.cpp` / `.h` / `CMakeLists.txt`）当前均不存在，整个 cpp-native 目录为空（Phase 4 待生成）。下述结构为规划骨架，供 Phase 4 实现时对照。
 
 ```text
 cpp-native/
@@ -269,9 +273,9 @@ cpp-native/
 
 | 调用方向 | 协议/方式 | 涉及目录 |
 | :--- | :--- | :--- |
-| **前端 → Java** | HTTP REST (`/api/*`) | `frontend/services/*.ts` → `java-backend/smt-gateway` |
-| **Java → Python** | gRPC 或 Kafka 异步 | `smt-agent-router` → `python-agents/agent-*/main.py` |
-| **Python → C++** | pybind11 (直接import `.so`) | `python-agents/agent-maintenance/phm_model.py` → `cpp-native/build/lib/*.so` |
-| **Java → C++** | JNI (需加载动态库) | `java-backend/smt-device-service` → `cpp-native/build/lib/*.so`（较少用） |
+| **前端 → Java** | HTTP REST (`/api/*`) | `frontend/src/services/*.ts`（Phase 5 待创建） → `java-backend/smt-gateway` |
+| **Java → Python** | HTTP（经网关转发） | `smt-gateway` → `python-agents/agent-*/main.py`（原 `smt-agent-router` 已移除） |
+| **Python → C++** | pybind11 (直接import `.so`) | `python-agents/agent-maintenance/predict.py` → `cpp-native/build/lib/*.so`（Phase 4 待生成） |
+| **Java → C++** | JNI (需加载动态库) | `java-backend/smt-device-service` → `cpp-native/build/lib/*.so`（较少用，Phase 4 待生成） |
 
 ---

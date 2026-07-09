@@ -4,6 +4,8 @@
 对外路径前缀 /v1/knowledge/**（经 smt-gateway StripPrefix=2 后落地本服务）。
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -23,10 +25,27 @@ from .models import (
     UploadResponse,
 )
 
+# RES-4：上传文件大小上限（50MB）
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：shutdown 时关闭共享 httpx 客户端（RES-1）。"""
+    yield
+    try:
+        from shared.llm_client import aclose as _aclose_llm
+
+        await _aclose_llm()
+    except Exception as exc:
+        logger.warning("shutdown: close llm_client failed", error=str(exc))
+
+
 app = FastAPI(
     title="SMT 知识助手 Agent",
     description="知识库 RAG 问答服务，支持文档上传、检索问答、文档管理。",
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 setup_logging(settings.log_level)
@@ -43,6 +62,13 @@ async def upload(file: UploadFile = File(...)):
             status_code=400,
             content=ErrorResponse(
                 error="unsupported_file_type", message="上传文件不能为空"
+            ).model_dump(),
+        )
+    if len(content) > MAX_UPLOAD_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content=ErrorResponse(
+                error="file_too_large", message="文件大小超过限制（最大 50MB）"
             ).model_dump(),
         )
     filename = file.filename or "unknown"
