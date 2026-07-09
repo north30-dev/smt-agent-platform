@@ -44,7 +44,7 @@ credentials.*
 .idea/
 .vscode/
 .trae/
-.mimo/
+.mimocode/
 *.iml
 *.ipr
 *.iws
