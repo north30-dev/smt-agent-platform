@@ -36,7 +36,7 @@ def workflow_store(monkeypatch):
 
 
 def _patch_graph_success(monkeypatch, summary_text="LLM 摘要"):
-    """mock app_graph.ainvoke 返回全成功结果。"""
+    """mock app_graph.ainvoke 返回全成功结果（含 execution 指令）。"""
     async def _fake_ainvoke(initial_state):
         return {
             "device_id": initial_state["device_id"],
@@ -44,6 +44,9 @@ def _patch_graph_success(monkeypatch, summary_text="LLM 摘要"):
             "diagnosis": {"root_causes": ["x"]},
             "quality_assessment": {"root_causes": ["y"]},
             "schedule_adjustment": {"estimated_delay_hours": 1.0},
+            "instructions": [
+                {"instruction_id": "INST-1", "type": "REPAIR", "priority": "MEDIUM"}
+            ],
             "summary": summary_text,
             "errors": {},
         }
@@ -70,7 +73,7 @@ def test_healthz_returns_200():
 
 
 def test_device_fault_returns_200_with_all_fields(monkeypatch):
-    """成功：返回 200，包含 workflow_id 与 4 个结果字段。"""
+    """成功：返回 200，包含 workflow_id 与全部结果字段（含 instructions）。"""
     _patch_graph_success(monkeypatch, summary_text="汇总")
 
     response = client.post(
@@ -85,6 +88,9 @@ def test_device_fault_returns_200_with_all_fields(monkeypatch):
     assert data["diagnosis"] == {"root_causes": ["x"]}
     assert data["quality_assessment"] == {"root_causes": ["y"]}
     assert data["schedule_adjustment"] == {"estimated_delay_hours": 1.0}
+    assert data["instructions"] == [
+        {"instruction_id": "INST-1", "type": "REPAIR", "priority": "MEDIUM"}
+    ]
     assert data["summary"] == "汇总"
     assert data["errors"] == {}
 
@@ -177,6 +183,87 @@ def test_device_fault_persists_workflow(monkeypatch, workflow_store):
 
 
 # ---------------------------------------------------------------------------
+# POST /v1/orchestrator/device_fault_event
+# ---------------------------------------------------------------------------
+
+
+def test_device_fault_event_returns_200_with_instructions(monkeypatch):
+    """事件入口成功：返回 WorkflowResponse，包含 instructions 字段。"""
+    _patch_graph_success(monkeypatch, summary_text="事件汇总")
+
+    response = client.post(
+        "/v1/orchestrator/device_fault_event",
+        json={"device_id": 9, "symptom": "温度异常", "source": "kafka"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["workflow_id"].startswith("wf-")
+    assert data["status"] == "SUCCESS"
+    assert data["diagnosis"] == {"root_causes": ["x"]}
+    assert data["instructions"] == [
+        {"instruction_id": "INST-1", "type": "REPAIR", "priority": "MEDIUM"}
+    ]
+    assert data["summary"] == "事件汇总"
+    assert data["errors"] == {}
+
+
+def test_device_fault_event_source_defaults_to_kafka(monkeypatch):
+    """source 缺省时默认为 kafka，编排逻辑与 device_fault 一致。"""
+    _patch_graph_success(monkeypatch)
+
+    response = client.post(
+        "/v1/orchestrator/device_fault_event",
+        json={"device_id": 10, "symptom": "停机"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "SUCCESS"
+    assert data["instructions"] == [
+        {"instruction_id": "INST-1", "type": "REPAIR", "priority": "MEDIUM"}
+    ]
+
+
+def test_device_fault_event_persists_workflow(monkeypatch, workflow_store):
+    """事件入口也应通过 save_workflow 持久化，可供 GET 查询。"""
+    _patch_graph_success(monkeypatch)
+
+    response = client.post(
+        "/v1/orchestrator/device_fault_event",
+        json={"device_id": 11, "symptom": "故障", "source": "kafka"},
+    )
+
+    workflow_id = response.json()["workflow_id"]
+    assert workflow_id in workflow_store
+    assert workflow_store[workflow_id]["status"] == "SUCCESS"
+    # instructions 应持久化
+    assert workflow_store[workflow_id]["instructions"] == [
+        {"instruction_id": "INST-1", "type": "REPAIR", "priority": "MEDIUM"}
+    ]
+
+
+def test_device_fault_event_invalid_device_id_returns_422():
+    """device_fault_event: device_id=0 → 422。"""
+    response = client.post(
+        "/v1/orchestrator/device_fault_event",
+        json={"device_id": 0, "symptom": "异响", "source": "kafka"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_device_fault_event_empty_symptom_returns_422():
+    """device_fault_event: symptom 为空 → 422。"""
+    response = client.post(
+        "/v1/orchestrator/device_fault_event",
+        json={"device_id": 1, "symptom": "", "source": "kafka"},
+    )
+
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
 # GET /v1/orchestrator/workflows/{workflow_id}
 # ---------------------------------------------------------------------------
 
@@ -198,6 +285,10 @@ def test_get_workflow_returns_stored(monkeypatch):
     assert data["workflow_id"] == workflow_id
     assert data["status"] == "SUCCESS"
     assert data["summary"] == "已存储摘要"
+    # instructions 通过 JSONB 持久化后应能正确回读
+    assert data["instructions"] == [
+        {"instruction_id": "INST-1", "type": "REPAIR", "priority": "MEDIUM"}
+    ]
 
 
 def test_get_workflow_unknown_returns_404():

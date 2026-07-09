@@ -29,6 +29,7 @@ def _register_kebab_packages():
         "agent-quality",
         "agent-orchestrator",
         "agent-scheduler",
+        "agent-execution",
     ]:
         underscore = kebab.replace("-", "_")
         if underscore in sys.modules:

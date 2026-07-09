@@ -1,7 +1,7 @@
 [project]
 name = "smt-python-agents"
-version = "0.2.0"
-description = "SMT 贴片产线智能运维平台 - Python 智能体层（Phase 2：知识助手 Agent + 设备运维 Agent；Phase 3：质量分析 Agent + 调度 Agent + LangGraph 编排）"
+version = "0.3.0"
+description = "SMT 贴片产线智能运维平台 - Python 智能体层（Phase 4：执行协同 Agent + Kafka 事件驱动 + 全流程闭环）"
 authors = [{name = "north30-dev", email = "north30dev@163.com"}]
 readme = "README.md"
 requires-python = ">=3.12"
@@ -21,6 +21,7 @@ dependencies = [
     "structlog>=24.1.0",
     "langgraph>=0.2.0",
     "langchain-core>=0.3.0",
+    "aiokafka>=0.11.0",
 ]
 
 [dependency-groups]
@@ -45,7 +46,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["agent-knowledge", "agent-maintenance", "agent-quality", "agent-scheduler", "agent-orchestrator", "shared"]
+source = ["agent-knowledge", "agent-maintenance", "agent-quality", "agent-scheduler", "agent-orchestrator", "agent-execution", "shared"]
 omit = ["tests/*", "*/__init__.py"]
 
 [tool.coverage.report]

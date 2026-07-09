@@ -56,6 +56,14 @@ spring:
             - Path=/api/agent/v1/orchestrator/**
           filters:
             - StripPrefix=2
+        # Phase 4 新增：执行智能体路由
+        # /api/agent/v1/execution/** → agent-execution（8006），StripPrefix=2 剥离 /api/agent，转发 /v1/execution/**
+        - id: agent-execution
+          uri: http://${SMT_AGENT_EXECUTION_HOST:localhost}:${SMT_AGENT_EXECUTION_PORT:8006}
+          predicates:
+            - Path=/api/agent/v1/execution/**
+          filters:
+            - StripPrefix=2
 
 # 注：logging 段已迁移到 logback-spring.xml（P0-8）
 

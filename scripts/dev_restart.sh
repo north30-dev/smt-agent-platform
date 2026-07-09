@@ -19,14 +19,14 @@ echo "========== [1/4] 检查中间件 =========="
 # dev_restart 不重启中间件，仅检查是否在运行
 cd "$PROJECT_ROOT/docker-compose"
 # 检查 PostgreSQL 端口作为中间件是否运行的标志
-if ss -tln 2>/dev/null | grep -q ":$PG_PORT "; then
+if ss -tln 2>/dev/null | grep -q ":$DB_PORT "; then
     echo "中间件已运行 ✓"
 else
     echo "[WARN] 中间件未运行，启动中间件..."
     docker compose up -d postgres redis mosquitto influxdb etcd minio milvus zookeeper kafka 2>&1 | tail -5
     echo "等待中间件就绪..."
     for i in $(seq 1 60); do
-        if ss -tln 2>/dev/null | grep -q ":$PG_PORT " && ss -tln 2>/dev/null | grep -q ":$KAFKA_PORT "; then break; fi
+        if ss -tln 2>/dev/null | grep -q ":$DB_PORT " && ss -tln 2>/dev/null | grep -q ":$KAFKA_PORT "; then break; fi
         sleep 1
     done
 fi
@@ -50,18 +50,18 @@ for module in smt-device-service smt-gateway; do
 done
 
 cd "$PROJECT_ROOT/java-backend"
-echo "启动 smt-device-service ($JAVA_PORT)..."
+echo "启动 smt-device-service ($DEVICE_SERVICE_HOST:$DEVICE_SERVICE_PORT)..."
 mvn -pl smt-device-service spring-boot:run > "$LOG_DIR/smt-device-service.log" 2>&1 &
 echo $! > "$LOG_DIR/smt-device-service.pid"
 
-echo "启动 smt-gateway ($GATEWAY_PORT)..."
+echo "启动 smt-gateway ($GATEWAY_HOST:$GATEWAY_PORT)..."
 mvn -pl smt-gateway spring-boot:run > "$LOG_DIR/smt-gateway.log" 2>&1 &
 echo $! > "$LOG_DIR/smt-gateway.pid"
 cd "$PROJECT_ROOT"
 
 echo "========== [4/4] 重启 Python 智能体 =========="
 # 先停掉旧进程（如有 PID 文件则 kill）
-for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler agent-orchestrator; do
+for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler agent-orchestrator agent-execution; do
     if [ -f "$LOG_DIR/${agent}.pid" ]; then
         old_pid=$(cat "$LOG_DIR/${agent}.pid")
         if kill -0 "$old_pid" 2>/dev/null; then
@@ -74,26 +74,30 @@ for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler age
 done
 
 cd "$PROJECT_ROOT/python-agents"
-echo "启动 agent-knowledge ($KNOWLEDGE_PORT)..."
+echo "启动 agent-knowledge ($KNOWLEDGE_HOST:$KNOWLEDGE_PORT)..."
 uv run uvicorn agent-knowledge.main:app --port "$KNOWLEDGE_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-knowledge.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-knowledge.pid"
 
-echo "启动 agent-maintenance ($MAINTENANCE_PORT)..."
+echo "启动 agent-maintenance ($MAINTENANCE_HOST:$MAINTENANCE_PORT)..."
 uv run uvicorn agent-maintenance.main:app --port "$MAINTENANCE_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-maintenance.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-maintenance.pid"
 
 # orchestrator 依赖 maintenance/quality/scheduler，因此最后启动
-echo "启动 agent-scheduler ($SCHEDULER_PORT)..."
+echo "启动 agent-scheduler ($SCHEDULER_HOST:$SCHEDULER_PORT_PORT)..."
 uv run uvicorn agent-scheduler.main:app --port "$SCHEDULER_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-scheduler.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-scheduler.pid"
 
-echo "启动 agent-quality ($QUALITY_PORT)..."
+echo "启动 agent-quality ($QUALITY_HOST:$QUALITY_PORT)..."
 uv run uvicorn agent-quality.main:app --port "$QUALITY_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-quality.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-quality.pid"
 
-echo "启动 agent-orchestrator ($ORCHESTRATOR_PORT)..."
+echo "启动 agent-orchestrator ($ORCHESTRATOR_HOST:$ORCHESTRATOR_PORT)..."
 uv run uvicorn agent-orchestrator.main:app --port "$ORCHESTRATOR_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-orchestrator.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-orchestrator.pid"
+
+echo "启动 agent-execution ($EXECUTION_HOST:$EXECUTION_PORT)..."
+uv run uvicorn agent-execution.main:app --port "$EXECUTION_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-execution.log" 2>&1 &
+echo $! > "$LOG_DIR/agent-execution.pid"
 cd "$PROJECT_ROOT"
 
 echo "========== 本地服务重启完成 =========="

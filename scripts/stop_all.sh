@@ -28,7 +28,7 @@ echo -e "${CYAN}=========================================="
 echo "  即将停止以下服务："
 echo -e "==========================================${NC}"
 echo "  应用服务（按 PID 文件 + 端口双策略）："
-echo "    Java device-service  (端口 $JAVA_PORT)"
+echo "    Java device-service  (端口 $DEVICE_SERVICE_PORT)"
 echo "    Java smt-gateway      (端口 $GATEWAY_PORT)"
 echo "    agent-scheduler       (端口 $SCHEDULER_PORT)"
 echo "    agent-maintenance     (端口 $MAINTENANCE_PORT)"
@@ -55,7 +55,7 @@ esac
 
 # ========== 1. 停止 Python 智能体 ==========
 info "[1/3] 停止 Python 智能体..."
-for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler agent-orchestrator; do
+for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler agent-orchestrator agent-execution; do
     stopped=false
     # 策略 1：PID 文件
     if [ -f "$LOG_DIR/${agent}.pid" ]; then

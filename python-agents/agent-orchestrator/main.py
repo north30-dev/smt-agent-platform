@@ -3,7 +3,7 @@
 端口 8005。对外提供设备故障编排入口与工作流查询接口。
 路径前缀 /v1/orchestrator/**。
 
-编排流程：设备故障 → 串行调用 maintenance → quality → scheduler → LLM 汇总。
+编排流程：设备故障 → 串行调用 maintenance → quality → scheduler → execution → LLM 汇总。
 任何子 Agent 不可用时降级为 skipped 状态，工作流继续执行。
 
 REL-1：工作流状态持久化到 PostgreSQL workflows 表（shared.db），进程重启不丢失。
@@ -32,7 +32,7 @@ from shared.observability import (
 
 from .agent_clients import AgentUnavailable
 from .graph import app_graph
-from .models import DeviceFaultRequest, WorkflowResponse
+from .models import DeviceFaultEventRequest, DeviceFaultRequest, WorkflowResponse
 
 
 @asynccontextmanager
@@ -111,25 +111,19 @@ def _determine_status(result: dict) -> str:
     return "PARTIAL"
 
 
-@app.post(
-    "/v1/orchestrator/device_fault",
-    response_model=WorkflowResponse,
-)
-async def device_fault(req: DeviceFaultRequest):
-    """设备故障编排入口：串联 maintenance/quality/scheduler → LLM 汇总。"""
-    workflow_id = f"wf-{uuid4().hex[:12]}"
-    logger.info(
-        "orchestrator device_fault invoked",
-        workflow_id=workflow_id,
-        device_id=req.device_id,
-    )
+async def _run_device_fault_workflow(device_id: int, symptom: str) -> WorkflowResponse:
+    """执行设备故障编排工作流（device_fault 与 device_fault_event 共享）。
 
+    包含：生成 workflow_id → ainvoke → 状态判定 → 持久化 → 构造响应。
+    """
+    workflow_id = f"wf-{uuid4().hex[:12]}"
     initial_state = {
-        "device_id": req.device_id,
-        "symptom": req.symptom,
+        "device_id": device_id,
+        "symptom": symptom,
         "diagnosis": None,
         "quality_assessment": None,
         "schedule_adjustment": None,
+        "instructions": [],
         "summary": None,
         "errors": {},
     }
@@ -152,9 +146,37 @@ async def device_fault(req: DeviceFaultRequest):
         diagnosis=result.get("diagnosis"),
         quality_assessment=result.get("quality_assessment"),
         schedule_adjustment=result.get("schedule_adjustment"),
+        instructions=result.get("instructions") or [],
         summary=result.get("summary"),
         errors=result.get("errors") or {},
     )
+
+
+@app.post(
+    "/v1/orchestrator/device_fault",
+    response_model=WorkflowResponse,
+)
+async def device_fault(req: DeviceFaultRequest):
+    """设备故障编排入口：串联 maintenance/quality/scheduler/execution → LLM 汇总。"""
+    logger.info(
+        "orchestrator device_fault invoked",
+        device_id=req.device_id,
+    )
+    return await _run_device_fault_workflow(req.device_id, req.symptom)
+
+
+@app.post(
+    "/v1/orchestrator/device_fault_event",
+    response_model=WorkflowResponse,
+)
+async def device_fault_event(req: DeviceFaultEventRequest):
+    """事件驱动入口：接收 Kafka 消费者转发的设备异常事件，复用 device_fault 编排逻辑。"""
+    logger.info(
+        "orchestrator device_fault_event invoked",
+        device_id=req.device_id,
+        source=req.source,
+    )
+    return await _run_device_fault_workflow(req.device_id, req.symptom)
 
 
 @app.get(
@@ -178,6 +200,7 @@ async def get_workflow(workflow_id: str):
         diagnosis=stored.get("diagnosis"),
         quality_assessment=stored.get("quality_assessment"),
         schedule_adjustment=stored.get("schedule_adjustment"),
+        instructions=stored.get("instructions") or [],
         summary=stored.get("summary"),
         errors=stored.get("errors") or {},
     )

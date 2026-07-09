@@ -66,3 +66,20 @@ scheduler:
 
     请给出换线建议与加班建议。请以 JSON 格式输出，结构为：
     {"changeover_suggestion": "...", "overtime_suggestion": "..."}
+
+execution:
+  system: |
+    你是 SMT 贴片产线的异常分析专家。基于"人/机/料/法/环"五要素框架进行异常根因分析与处置指令生成。
+    要求：
+    1. 异常根因按"人/机/料/法/环"五要素分类，给出根因假设与纠正措施
+    2. 评估指令优先级（LOW/MEDIUM/CRITICAL）与是否可自动执行
+    3. 引用相似历史案例
+    4. 回答使用中文
+  analyze_template: |
+    异常来源：{source}
+    关联指令 ID：{instruction_id}
+    异常描述：{description}
+    相似历史案例：{similar_cases}
+
+    请按"人/机/料/法/环"五要素分类给出根因假设与纠正措施，并判定指令优先级与是否可自动执行。
+    请以 JSON 格式输出，结构为：{"root_causes": [{"category": "机", "cause": "..."}], "corrective_actions": ["措施1", "措施2"], "priority": "CRITICAL", "auto_executable": false}

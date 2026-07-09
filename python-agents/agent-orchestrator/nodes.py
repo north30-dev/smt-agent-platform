@@ -4,7 +4,7 @@
 所有节点对 AgentUnavailable 做降级处理（写入 errors + skipped 状态），
 绝不向上抛出，确保线性图能跑完所有节点。
 
-节点顺序：maintenance → quality → scheduler → summary
+节点顺序：maintenance → quality → scheduler → execution → summary
 """
 
 import json
@@ -93,6 +93,45 @@ async def scheduler_node(state: OrchestratorState) -> dict:
     return {"schedule_adjustment": result}
 
 
+async def execution_node(state: OrchestratorState) -> dict:
+    """调用 execution Agent 将 diagnosis + schedule_adjustment 转化为执行指令。
+
+    成功 → 写入 instructions（指令列表）。
+    失败 → instructions=[]，errors 记录 execution 错误。
+
+    execution 为 best-effort 节点：其失败不改变 maintenance/quality/scheduler
+    已确定的工作流状态（SUCCESS 不会被降级为 PARTIAL）。
+    """
+    diagnosis = state.get("diagnosis")
+    schedule_adjustment = state.get("schedule_adjustment")
+
+    # 如果两者都为空或 skipped，无需生成指令
+    diag_empty = not diagnosis or (
+        isinstance(diagnosis, dict) and diagnosis.get("status") == "skipped"
+    )
+    sched_empty = not schedule_adjustment or (
+        isinstance(schedule_adjustment, dict)
+        and schedule_adjustment.get("status") == "skipped"
+    )
+    if diag_empty and sched_empty:
+        return {"instructions": []}
+
+    source_workflow_id = state.get("workflow_id", f"wf-temp-{id(state)}")
+
+    try:
+        instructions = await agent_clients.call_execution(
+            source_workflow_id,
+            diagnosis if isinstance(diagnosis, dict) else {},
+            schedule_adjustment if isinstance(schedule_adjustment, dict) else {},
+        )
+    except AgentUnavailable as exc:
+        return {
+            "instructions": [],
+            "errors": _merge_errors(state.get("errors", {}), "execution", str(exc)),
+        }
+    return {"instructions": instructions}
+
+
 async def summary_node(state: OrchestratorState) -> dict:
     """基于前三个节点结果，调用 LLM 生成 ≤300 字汇总摘要。
 
@@ -155,6 +194,12 @@ def _build_summary_prompt(state: OrchestratorState) -> str:
         parts.append(f"急单调度调整: （已跳过：{schedule.get('reason', '未知')}）")
     else:
         parts.append("急单调度调整: （未生成）")
+
+    instructions = state.get("instructions")
+    if instructions:
+        parts.append("执行指令: " + _safe_json(instructions, max_chars=800))
+    else:
+        parts.append("执行指令: （未生成）")
 
     errors = state.get("errors") or {}
     if errors:

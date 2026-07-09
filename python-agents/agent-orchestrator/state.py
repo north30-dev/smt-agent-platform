@@ -1,6 +1,6 @@
 """LangGraph 共享状态定义。
 
-编排流程在四个节点（maintenance / quality / scheduler / summary）之间
+编排流程在五个节点（maintenance / quality / scheduler / execution / summary）之间
 通过 OrchestratorState 传递中间结果。线性图：每个节点读取上一节点写入
 的最新状态，并将自身结果合并写入。
 
@@ -22,6 +22,9 @@ class OrchestratorState(TypedDict):
     diagnosis: dict | None
     quality_assessment: dict | None
     schedule_adjustment: dict | None
+
+    # execution Agent 转化出的执行指令列表（成功为 list[dict]，失败/无内容为 []）
+    instructions: list[dict]
 
     # 最终 LLM 汇总文本
     summary: str | None

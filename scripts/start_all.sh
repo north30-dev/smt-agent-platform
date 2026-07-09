@@ -99,7 +99,7 @@ docker compose up -d postgres redis mosquitto influxdb etcd minio milvus zookeep
 cd "$PROJECT_ROOT"
 
 info "等待中间件就绪..."
-wait_for_port "$PG_PORT"         30 "PostgreSQL"   || exit 1
+wait_for_port "$DB_PORT"         30 "PostgreSQL"   || exit 1
 wait_for_port "$REDIS_PORT"      15 "Redis"         || exit 1
 wait_for_port "$MQTT_PORT"       15 "Mosquitto"     || exit 1
 wait_for_port "$INFLUX_PORT"     15 "InfluxDB"      || exit 1
@@ -143,19 +143,19 @@ for module in smt-device-service smt-gateway; do
 done
 
 cd "$PROJECT_ROOT/java-backend"
-info "启动 smt-device-service ($JAVA_PORT)..."
+info "启动 smt-device-service ($DEVICE_SERVICE_PORT)..."
 mvn -pl smt-device-service spring-boot:run > "$LOG_DIR/smt-device-service.log" 2>&1 &
 echo $! > "$LOG_DIR/smt-device-service.pid"
 cd "$PROJECT_ROOT"
 
 info "等待 smt-device-service 就绪..."
-wait_for_health "http://$HOST:$JAVA_PORT/actuator/health" 60 "smt-device-service" "UP" || exit 1
+wait_for_health "http://$HOST:$DEVICE_SERVICE_PORT/actuator/health" 60 "smt-device-service" "UP" || exit 1
 
 # ========== 5. 启动 Python 智能体 ==========
 info "启动 Python 智能体..."
 
 # 停止旧进程
-for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler agent-orchestrator; do
+for agent in agent-knowledge agent-maintenance agent-quality agent-scheduler agent-orchestrator agent-execution; do
     if [ -f "$LOG_DIR/${agent}.pid" ]; then
         old_pid=$(cat "$LOG_DIR/${agent}.pid")
         if kill -0 "$old_pid" 2>/dev/null; then
@@ -189,11 +189,15 @@ info "启动 agent-orchestrator ($ORCHESTRATOR_PORT)..."
 uv run uvicorn agent-orchestrator.main:app --port "$ORCHESTRATOR_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-orchestrator.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-orchestrator.pid"
 
+info "启动 agent-execution ($EXECUTION_PORT)..."
+uv run uvicorn agent-execution.main:app --port "$EXECUTION_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-execution.log" 2>&1 &
+echo $! > "$LOG_DIR/agent-execution.pid"
+
 cd "$PROJECT_ROOT"
 
 # ========== 6. 等待所有 Python Agent 就绪 ==========
 info "等待 Python 智能体就绪..."
-for port in "$SCHEDULER_PORT" "$MAINTENANCE_PORT" "$QUALITY_PORT" "$KNOWLEDGE_PORT" "$ORCHESTRATOR_PORT"; do
+for port in "$SCHEDULER_PORT" "$MAINTENANCE_PORT" "$QUALITY_PORT" "$KNOWLEDGE_PORT" "$ORCHESTRATOR_PORT" "$EXECUTION_PORT"; do
     wait_for_health "http://$HOST:$port/healthz" 30 "agent-$port" "healthy" || exit 1
 done
 
@@ -204,7 +208,7 @@ echo "  冷启动完成 ✓"
 echo "=========================================="
 echo "服务清单："
 echo "  中间件："
-echo "    PostgreSQL  : $HOST:$PG_PORT"
+echo "    PostgreSQL  : $HOST:$DB_PORT"
 echo "    Redis        : $HOST:$REDIS_PORT"
 echo "    Mosquitto    : $HOST:$MQTT_PORT"
 echo "    InfluxDB     : $HOST:$INFLUX_PORT"
@@ -212,12 +216,13 @@ echo "    Milvus       : $HOST:$MILVUS_PORT"
 echo "    Zookeeper    : $HOST:$ZOOKEEPER_PORT"
 echo "    Kafka        : $HOST:$KAFKA_PORT"
 echo "  应用服务："
-echo "    device-service  : http://$HOST:$JAVA_PORT"
+echo "    device-service  : http://$HOST:$DEVICE_SERVICE_PORT"
 echo "    scheduler       : http://$HOST:$SCHEDULER_PORT"
 echo "    maintenance     : http://$HOST:$MAINTENANCE_PORT"
 echo "    quality         : http://$HOST:$QUALITY_PORT"
 echo "    knowledge       : http://$HOST:$KNOWLEDGE_PORT"
 echo "    orchestrator    : http://$HOST:$ORCHESTRATOR_PORT"
+echo "    execution       : http://$HOST:$EXECUTION_PORT"
 echo ""
 echo "日志位置: $LOG_DIR/"
 echo "=========================================="

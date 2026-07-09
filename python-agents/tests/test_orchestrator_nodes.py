@@ -14,6 +14,7 @@ import pytest
 from agent_orchestrator.agent_clients import AgentUnavailable
 from agent_orchestrator.nodes import (
     _merge_errors,
+    execution_node,
     maintenance_node,
     quality_node,
     scheduler_node,
@@ -31,6 +32,7 @@ def base_state():
         "diagnosis": None,
         "quality_assessment": None,
         "schedule_adjustment": None,
+        "instructions": [],
         "summary": None,
         "errors": {},
     }
@@ -183,6 +185,165 @@ async def test_scheduler_node_unavailable(monkeypatch, base_state):
     assert result["schedule_adjustment"]["status"] == "skipped"
     assert "refused" in result["schedule_adjustment"]["reason"]
     assert result["errors"]["scheduler"] == "refused"
+
+
+# ---------------------------------------------------------------------------
+# execution_node
+# ---------------------------------------------------------------------------
+
+
+async def test_execution_node_success(monkeypatch, base_state):
+    """成功：调用 call_execution 并写入 instructions 列表。"""
+    base_state["diagnosis"] = {"root_causes": ["轴承磨损"]}
+    base_state["schedule_adjustment"] = {"urgent_order_no": "URGENT-1-1"}
+    base_state["workflow_id"] = "wf-abc123"
+
+    mock_instructions = [
+        {"instruction_id": "INST-1", "type": "REPAIR", "payload": {"action": "更换轴承"}},
+        {"instruction_id": "INST-2", "type": "PARAM_CHANGE", "payload": {"param": "temp"}},
+    ]
+    captured = {}
+
+    async def _fake_call_execution(source_workflow_id, diagnosis, schedule_adjustment):
+        captured["source_workflow_id"] = source_workflow_id
+        captured["diagnosis"] = diagnosis
+        captured["schedule_adjustment"] = schedule_adjustment
+        return mock_instructions
+
+    monkeypatch.setattr(
+        "agent_orchestrator.nodes.agent_clients.call_execution",
+        _fake_call_execution,
+    )
+
+    result = await execution_node(base_state)
+
+    assert result == {"instructions": mock_instructions}
+    assert "errors" not in result
+    # 验证透传给 execution Agent 的参数
+    assert captured["source_workflow_id"] == "wf-abc123"
+    assert captured["diagnosis"] == {"root_causes": ["轴承磨损"]}
+    assert captured["schedule_adjustment"] == {"urgent_order_no": "URGENT-1-1"}
+
+
+async def test_execution_node_unavailable(monkeypatch, base_state):
+    """AgentUnavailable：返回 instructions=[] 与 errors.execution。"""
+    base_state["diagnosis"] = {"root_causes": ["x"]}
+    base_state["schedule_adjustment"] = {"urgent_order_no": "URGENT-1-1"}
+    monkeypatch.setattr(
+        "agent_orchestrator.nodes.agent_clients.call_execution",
+        AsyncMock(side_effect=AgentUnavailable("execution", "connection refused")),
+    )
+
+    result = await execution_node(base_state)
+
+    assert result["instructions"] == []
+    assert result["errors"]["execution"] == "connection refused"
+
+
+async def test_execution_node_unavailable_merges_existing_errors(monkeypatch, base_state):
+    """已有 errors 时，execution 错误应叠加而非覆盖。"""
+    base_state["diagnosis"] = {"root_causes": ["x"]}
+    base_state["schedule_adjustment"] = {"urgent_order_no": "URGENT-1-1"}
+    base_state["errors"] = {"maintenance": "previous error"}
+    monkeypatch.setattr(
+        "agent_orchestrator.nodes.agent_clients.call_execution",
+        AsyncMock(side_effect=AgentUnavailable("execution", "down")),
+    )
+
+    result = await execution_node(base_state)
+
+    assert result["instructions"] == []
+    assert result["errors"]["maintenance"] == "previous error"
+    assert result["errors"]["execution"] == "down"
+
+
+async def test_execution_node_both_inputs_empty_short_circuits(monkeypatch, base_state):
+    """diagnosis 与 schedule_adjustment 均为空：short-circuit，不调 execution。"""
+    base_state["diagnosis"] = None
+    base_state["schedule_adjustment"] = None
+
+    call_mock = AsyncMock(return_value=[])
+    monkeypatch.setattr(
+        "agent_orchestrator.nodes.agent_clients.call_execution",
+        call_mock,
+    )
+
+    result = await execution_node(base_state)
+
+    assert result == {"instructions": []}
+    assert "errors" not in result
+    # 未调用 execution Agent
+    call_mock.assert_not_called()
+
+
+async def test_execution_node_both_inputs_skipped_short_circuits(monkeypatch, base_state):
+    """diagnosis 与 schedule_adjustment 均为 skipped：short-circuit，不调 execution。"""
+    base_state["diagnosis"] = {"status": "skipped", "reason": "down"}
+    base_state["schedule_adjustment"] = {"status": "skipped", "reason": "down"}
+
+    call_mock = AsyncMock(return_value=[])
+    monkeypatch.setattr(
+        "agent_orchestrator.nodes.agent_clients.call_execution",
+        call_mock,
+    )
+
+    result = await execution_node(base_state)
+
+    assert result == {"instructions": []}
+    assert "errors" not in result
+    call_mock.assert_not_called()
+
+
+async def test_execution_node_only_diagnosis_present_calls_execution(monkeypatch, base_state):
+    """仅 diagnosis 有值、schedule 为空：仍调用 execution。"""
+    base_state["diagnosis"] = {"root_causes": ["x"]}
+    base_state["schedule_adjustment"] = None
+    monkeypatch.setattr(
+        "agent_orchestrator.nodes.agent_clients.call_execution",
+        AsyncMock(return_value=[{"instruction_id": "INST-1"}]),
+    )
+
+    result = await execution_node(base_state)
+
+    assert result == {"instructions": [{"instruction_id": "INST-1"}]}
+
+
+async def test_execution_node_only_schedule_present_calls_execution(monkeypatch, base_state):
+    """仅 schedule_adjustment 有值、diagnosis 为空：仍调用 execution。"""
+    base_state["diagnosis"] = None
+    base_state["schedule_adjustment"] = {"urgent_order_no": "URGENT-1-1"}
+    monkeypatch.setattr(
+        "agent_orchestrator.nodes.agent_clients.call_execution",
+        AsyncMock(return_value=[{"instruction_id": "INST-1"}]),
+    )
+
+    result = await execution_node(base_state)
+
+    assert result == {"instructions": [{"instruction_id": "INST-1"}]}
+
+
+async def test_execution_node_passes_empty_dict_for_non_dict_inputs(monkeypatch, base_state):
+    """diagnosis/schedule 非 dict 时，传空 dict 给 execution（防御性）。"""
+    base_state["diagnosis"] = "not-a-dict"
+    base_state["schedule_adjustment"] = 12345
+    captured = {}
+
+    async def _fake_call_execution(source_workflow_id, diagnosis, schedule_adjustment):
+        captured["diagnosis"] = diagnosis
+        captured["schedule_adjustment"] = schedule_adjustment
+        return [{"instruction_id": "INST-1"}]
+
+    monkeypatch.setattr(
+        "agent_orchestrator.nodes.agent_clients.call_execution",
+        _fake_call_execution,
+    )
+
+    result = await execution_node(base_state)
+
+    assert result == {"instructions": [{"instruction_id": "INST-1"}]}
+    # 非 dict 入参被替换为空 dict
+    assert captured["diagnosis"] == {}
+    assert captured["schedule_adjustment"] == {}
 
 
 # ---------------------------------------------------------------------------

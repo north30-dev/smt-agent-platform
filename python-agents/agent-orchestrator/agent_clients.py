@@ -1,6 +1,6 @@
 """子 Agent HTTP 客户端封装。
 
-封装 maintenance / quality / scheduler 三个子 Agent 的 HTTP 调用。
+封装 maintenance / quality / scheduler / execution 四个子 Agent 的 HTTP 调用。
 - 使用 httpx.AsyncClient 避免阻塞事件循环。
 - 引入 tenacity 重试（对 ConnectError/TimeoutException/ServiceBusy）。
 - 网络错误统一抛出 AgentUnavailable，由 nodes 层捕获并降级为 skipped 状态。
@@ -36,13 +36,14 @@ class AgentUnavailable(Exception):
 
 
 class AgentClients:
-    """三个子 Agent 的异步 HTTP 客户端集合。"""
+    """四个子 Agent 的异步 HTTP 客户端集合。"""
 
     def __init__(
         self,
         maintenance_url: str,
         quality_url: str,
         scheduler_url: str,
+        execution_url: str,
         client: httpx.AsyncClient | None = None,
     ):
         """初始化客户端。
@@ -51,11 +52,13 @@ class AgentClients:
             maintenance_url: maintenance Agent 基地址。
             quality_url: quality Agent 基地址。
             scheduler_url: scheduler Agent 基地址。
+            execution_url: execution Agent 基地址。
             client: 可选的共享 httpx.AsyncClient（依赖注入，便于测试 mock）。
         """
         self._maintenance_url = maintenance_url.rstrip("/")
         self._quality_url = quality_url.rstrip("/")
         self._scheduler_url = scheduler_url.rstrip("/")
+        self._execution_url = execution_url.rstrip("/")
         self._client = client
         self._owns_client = client is None
 
@@ -202,12 +205,62 @@ class AgentClients:
                 "scheduler", f"scheduler agent 不可达: {exc}"
             ) from exc
 
+    async def call_execution(
+        self,
+        source_workflow_id: str,
+        diagnosis: dict,
+        schedule_adjustment: dict,
+    ) -> list[dict]:
+        """调用 execution Agent 将编排结果转化为执行指令。
+
+        Args:
+            source_workflow_id: 来源工作流 ID，用于 execution 侧追溯。
+            diagnosis: maintenance 诊断结果。
+            schedule_adjustment: scheduler 急单调整结果。
+
+        Returns:
+            执行指令列表（list[dict]）。
+
+        Raises:
+            AgentUnavailable: 网络错误或 HTTP 非 2xx 或响应非 JSON。
+        """
+        url = f"{self._execution_url}/v1/execution/instructions"
+        try:
+            data = await self._post(
+                "execution",
+                url,
+                {
+                    "source_workflow_id": source_workflow_id,
+                    "diagnosis": diagnosis,
+                    "schedule_adjustment": schedule_adjustment,
+                },
+            )
+        except (httpx.ConnectError, httpx.TimeoutException, ServiceBusy) as exc:
+            raise AgentUnavailable(
+                "execution", f"execution agent 不可达: {exc}"
+            ) from exc
+
+        # _post 返回 resp.json()，理论上可能是任意 JSON 值；防御性校验为 dict
+        if not isinstance(data, dict):
+            raise AgentUnavailable(
+                "execution",
+                f"execution agent 响应非 JSON 对象: {type(data).__name__}",
+            )
+        instructions = data.get("instructions")
+        if not isinstance(instructions, list):
+            raise AgentUnavailable(
+                "execution",
+                f"execution agent 响应 instructions 字段非 list: {type(instructions).__name__}",
+            )
+        return instructions
+
 
 # 模块级单例（AsyncClient 懒初始化，import 时不创建连接）
 agent_clients = AgentClients(
     settings.agent_maintenance_base_url,
     settings.agent_quality_base_url,
     settings.agent_scheduler_base_url,
+    settings.agent_execution_base_url,
 )
 
 

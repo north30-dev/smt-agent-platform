@@ -13,6 +13,14 @@ class DeviceFaultRequest(BaseModel):
     symptom: str = Field(..., min_length=1, max_length=2000, description="故障现象描述")
 
 
+class DeviceFaultEventRequest(BaseModel):
+    """设备故障事件驱动请求体（Kafka 消费者转发）。"""
+
+    device_id: int = Field(..., ge=1, description="设备 ID")
+    symptom: str = Field(..., min_length=1, max_length=2000, description="故障现象描述")
+    source: str = Field("kafka", description="事件来源（如 kafka）")
+
+
 class WorkflowResponse(BaseModel):
     """编排工作流响应。"""
 
@@ -28,6 +36,9 @@ class WorkflowResponse(BaseModel):
     )
     schedule_adjustment: dict | None = Field(
         None, description="scheduler Agent 急单调整结果"
+    )
+    instructions: list = Field(
+        default_factory=list, description="execution Agent 生成的执行指令列表"
     )
     summary: str | None = Field(None, description="LLM 汇总摘要")
     errors: dict[str, str] = Field(

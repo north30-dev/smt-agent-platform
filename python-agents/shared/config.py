@@ -78,6 +78,30 @@ class Settings(BaseSettings):
     agent_quality_base_url: str = "http://localhost:8003"
     agent_scheduler_base_url: str = "http://localhost:8001"
 
+    # Phase 4：执行协同 Agent 基地址（orchestrator execution 节点调用）
+    agent_execution_base_url: str = "http://localhost:8006"
+
+    # Phase 4：Kafka 事件总线配置
+    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_consumer_group: str = "smt-execution-group"
+    kafka_topic_device_anomaly: str = "device.anomaly"
+    kafka_topic_execution_instruction: str = "execution.instruction"
+    kafka_topic_exception_record: str = "exception.record"
+    # Kafka 消费者是否启用（Kafka 不可达时降级为日志告警）
+    kafka_enabled: bool = True
+
+    # Phase 4：执行协同 Agent 审批规则
+    # priority=LOW 自动执行；priority=CRITICAL 或 type=PARAM_CHANGE 必须审批
+    execution_auto_approve_priorities: list = Field(
+        default_factory=lambda: ["LOW", "MEDIUM"]
+    )
+    execution_require_approval_types: list = Field(
+        default_factory=lambda: ["PARAM_CHANGE"]
+    )
+    execution_require_approval_priorities: list = Field(
+        default_factory=lambda: ["CRITICAL"]
+    )
+
     # Phase 1 m：运维风险阈值
     maintenance_risk_low: int = 85
     maintenance_risk_medium: int = 60

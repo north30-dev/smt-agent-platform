@@ -4,8 +4,9 @@ SMT 贴片产线智能运维平台的 Python 智能体层。
 
 - **Phase 2** 交付两个 Agent：知识助手（agent-knowledge）与设备运维（agent-maintenance）。
 - **Phase 3** 新增三个 Agent：质量分析（agent-quality）、调度（agent-scheduler）、LangGraph 多 Agent 编排（agent-orchestrator）。
+- **Phase 4** 新增执行 Agent：执行闭环（agent-execution），将编排决策下发为工单/指令并跟踪闭环。
 
-五个 Agent 各自独立运行 FastAPI 服务，端口 8001~8005；orchestrator 通过 REST 编排其余 Agent，形成"感知—诊断—评估—调度—执行"闭环。
+六个 Agent 各自独立运行 FastAPI 服务，端口 8001~8006；orchestrator 通过 REST 编排其余 Agent，形成"感知—诊断—评估—调度—执行"闭环，agent-execution 负责执行层的指令下发与状态回写。
 
 | Agent | 目录 | 端口 | 职责 |
 |---|---|---|---|
@@ -14,6 +15,7 @@ SMT 贴片产线智能运维平台的 Python 智能体层。
 | 质量分析 Agent | `agent-quality/` | 8003 | 不良实时监控、根因分析、质量告警 |
 | 知识助手 Agent | `agent-knowledge/` | 8004 | 文档入库 + RAG 问答（SOP/手册/工艺文件检索） |
 | 编排 Agent | `agent-orchestrator/` | 8005 | LangGraph 多 Agent 协同编排 |
+| 执行 Agent | `agent-execution/` | 8006 | 执行指令下发、审批流转、异常处理与状态回写 |
 
 ## 依赖关系
 
@@ -82,6 +84,9 @@ uv run uvicorn agent-knowledge.main:app --port 8004 --reload
 
 # 编排 Agent（端口 8005，依赖上述四个 Agent，最后启动）
 uv run uvicorn agent-orchestrator.main:app --port 8005 --reload
+
+# 执行 Agent（端口 8006，承接 orchestrator 下发的工单/指令并跟踪闭环）
+uv run uvicorn agent-execution.main:app --port 8006 --reload
 ```
 
 ### 4. 运行测试
@@ -175,12 +180,19 @@ python-agents/
 │   ├── graph.py                    # LangGraph 多 Agent 图定义
 │   ├── nodes.py                    # 图节点函数（调用各子 Agent）
 │   └── models.py                   # Pydantic 模型
+├── agent-execution/                # 执行 Agent（端口 8006）
+│   ├── main.py                     # FastAPI 应用（执行入口）
+│   ├── instruction_service.py      # 执行指令管理（创建/进度/验证）
+│   ├── approval_service.py         # 人工审批流转
+│   ├── exception_service.py       # 执行异常记录与分析
+│   ├── kafka_consumer.py           # 消费 device.anomaly 触发编排
+│   └── models.py                   # Pydantic 模型
 └── tests/                          # 单元测试
 ```
 
 ## 代码规范（AGENTS.md §3.2）
 
-- 包名/目录名用 `kebab-case`（`agent-knowledge`、`agent-maintenance`、`agent-quality`、`agent-scheduler`、`agent-orchestrator`）
+- 包名/目录名用 `kebab-case`（`agent-knowledge`、`agent-maintenance`、`agent-quality`、`agent-scheduler`、`agent-orchestrator`、`agent-execution`）
 - Python 导入用下划线模块名（`from shared.llm_client import chat`）
 - 强制使用 Pydantic 做请求/响应模型校验
 - 大模型调用统一走 `shared/llm_client.py`，禁止在各 Agent 内直接 new client
