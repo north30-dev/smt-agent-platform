@@ -52,6 +52,9 @@ credentials.*
 .classpath
 .settings/
 
+# ===== 模块 Agent 文档 =====
+.agent/
+
 # ===== 操作系统 =====
 .DS_Store
 Thumbs.db

@@ -258,3 +258,65 @@ docs(agent): 补充运维 Agent 接口说明
 - ❌ 在报告中写入补丁代码（安全类报告遵循 skill §9.2 "Recommendation is prose, not code"）
 - ❌ 跳过 §6.4 元信息表直接展开细节
 
+***
+
+## 七、模块 Agent 文档规范
+
+### 7.1 目的
+
+每个模块目录下的 `.agent/` 文件夹存放该模块的说明文档，供 Agent 在执行任务前了解模块情况、执行后记录变更。
+
+### 7.2 目录结构
+
+`.agent/` 目录被 `.gitignore` 忽略，不参与版本管理。
+
+```
+<模块>/.agent/
+├── MODULE_OVERVIEW.md      # 模块概览（职责/构建/依赖/安全/部署）
+├── <MODULE_SPECIFIC>.md    # 模块特有文档（见 §7.3）
+└── CHANGELOG.md            # Agent 变更记录
+```
+
+### 7.3 文档清单（严格定义，共 18 个文件）
+
+| 模块 | 文件1 | 文件2（特有） | 文件3 |
+|------|-------|-------------|-------|
+| api-contracts | MODULE_OVERVIEW.md | API_REGISTRY.md | CHANGELOG.md |
+| cpp-native | MODULE_OVERVIEW.md | ALGORITHM_REGISTRY.md | CHANGELOG.md |
+| docker-compose | MODULE_OVERVIEW.md | NETWORK_ENV.md | CHANGELOG.md |
+| frontend | MODULE_OVERVIEW.md | PAGE_REGISTRY.md | CHANGELOG.md |
+| java-backend | MODULE_OVERVIEW.md | DATABASE_SCHEMA.md | CHANGELOG.md |
+| python-agents | MODULE_OVERVIEW.md | AGENT_REGISTRY.md | CHANGELOG.md |
+
+### 7.4 Agent 行为规则
+
+#### 执行任务前（必须）
+1. 识别任务涉及的模块
+2. 阅读该模块 `.agent/MODULE_OVERVIEW.md`（必读）
+3. 根据任务性质选择性阅读模块特有文档（如修改 API 则读 API_REGISTRY.md）
+4. 阅读 `.agent/CHANGELOG.md` 了解近期变更
+
+#### 执行任务后（必须）
+1. 更新 `.agent/CHANGELOG.md`，记录本次变更：
+   ```
+   ## [YYYY-MM-DD] 变更标题
+   - 变更内容
+   - 影响范围
+   ```
+2. 如涉及模块结构/接口/Schema 变更，同步更新对应模块特有文档
+3. 如涉及核心职责/依赖/安全边界变更，同步更新 MODULE_OVERVIEW.md
+
+### 7.5 文件格式规范
+
+- 文件名：全大写英文，空格用下划线（`MODULE_OVERVIEW.md`）
+- 语言：中文为主，技术术语保留英文
+- 内容：简洁实用，重点突出，避免冗余描述
+- 更新：变更时追加条目，不删除历史记录
+
+### 7.6 禁止行为
+
+- ❌ 跳过 §7.4 执行前阅读步骤直接修改代码
+- ❌ 执行任务后不更新 CHANGELOG.md
+- ❌ 在文档中写入敏感信息（密钥、密码、Token）
+- ❌ 自创文档文件（仅限 §7.3 定义的 18 个文件）
+

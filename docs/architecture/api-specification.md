@@ -1,8 +1,8 @@
 # SMT Agent Platform API规范文档
 
-**版本**: v1.0
-**日期**: 2026-07-07
-**状态**: Phase 3开发阶段
+**版本**: v1.1
+**日期**: 2026-07-11
+**状态**: Phase 3-4 开发阶段
 **适用范围**: 开发环境测试与集成
 
 ---
@@ -13,7 +13,7 @@
 
 本文档定义了SMT智能运维平台所有服务的API规范，包括：
 - Java后端服务API（设备管理）
-- Python智能体层API（5个Agent）
+- Python智能体层API（6个Agent）
 - 大模型服务API（LM Studio）
 - 中间件服务接口
 
@@ -29,22 +29,24 @@
 ┌─────────────────────────────────────────────────────────┐
 │  智能体层（Python）                                      │
 │  - Orchestrator (8005) → 编排协同                        │
-│  - Scheduler (8001)   → 生产调度                         │
-│  - Maintenance (8002) → 设备运维                         │
-│  - Quality (8003)     → 质量分析                         │
-│  - Knowledge (8004)   → 知识检索                         │
+│  - Execution (8006)    → 执行智能体                      │
+│  - Scheduler (8001)    → 生产调度                        │
+│  - Maintenance (8002)  → 设备运维                        │
+│  - Quality (8003)      → 质量分析                        │
+│  - Knowledge (8004)    → 知识检索                        │
 └─────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │  服务层（Java）                                          │
 │  - Device Service (8081) → 设备台账管理                  │
+│  - Gateway (8080)        → API网关路由                   │
 │  - Spring Boot + MyBatis-Plus                           │
 └─────────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────┐
 │  数据层                                                 │
 │  - PostgreSQL (5432)   → 关系型数据                      │
-│  - Redis (6379)        → 缓存                            │
+│  - Redis (6380)        → 缓存                            │
 │  - InfluxDB (8086)     → 时序数据                        │
 │  - Milvus (19530)      → 向量检索                        │
 │  - LM Studio (1234)    → 大模型推理                      │
@@ -59,12 +61,14 @@
 
 | 服务名称 | 基础URL | 端口 | 开发状态 |
 |---------|---------|------|---------|
+| **Java Gateway** | `http://localhost:8080` | 8080 | Phase 1 ✅ |
 | **Java Device Service** | `http://localhost:8081` | 8081 | Phase 1 ✅ |
-| **Scheduler Agent** | `http://localhost:8001` | 8001 | Phase 3 ⚠️ |
+| **Scheduler Agent** | `http://localhost:8001` | 8001 | Phase 3 ✅ |
 | **Maintenance Agent** | `http://localhost:8002` | 8002 | Phase 2 ✅ |
-| **Quality Agent** | `http://localhost:8003` | 8003 | Phase 3 ⚠️ |
+| **Quality Agent** | `http://localhost:8003` | 8003 | Phase 3 ✅ |
 | **Knowledge Agent** | `http://localhost:8004` | 8004 | Phase 2 ✅ |
-| **Orchestrator Agent** | `http://localhost:8005` | 8005 | Phase 3 ⚠️ |
+| **Orchestrator Agent** | `http://localhost:8005` | 8005 | Phase 3 ✅ |
+| **Execution Agent** | `http://localhost:8006` | 8006 | Phase 3 ✅ |
 
 ### 2.2 大模型服务
 
@@ -77,11 +81,31 @@
 | 服务名称 | 基础URL | 端口 | 用途 |
 |---------|---------|------|------|
 | **PostgreSQL** | `localhost:5432` | 5432 | 关系型数据库（smt库） |
-| **Redis** | `localhost:6379` | 6379 | 缓存与会话存储 |
+| **Redis** | `localhost:6380` | 6380 | 缓存与会话存储 |
 | **InfluxDB** | `http://localhost:8086` | 8086 | 时序数据存储 |
 | **Milvus** | `localhost:19530` | 19530 | 向量检索引擎 |
 | **MinIO Console** | `http://localhost:9001` | 9001 | 对象存储管理界面 |
 | **Mosquitto MQTT** | `tcp://localhost:1883` | 1883 | MQTT Broker |
+
+### 2.4 模块 Agent 文档
+
+每个模块目录下的 `.agent/` 文件夹存放该模块的说明文档，供 Agent 在执行任务前了解模块情况、执行后记录变更。
+
+**文档清单（共 18 个文件）**：
+
+| 模块 | 文件1 | 文件2（特有） | 文件3 |
+|------|-------|-------------|-------|
+| api-contracts | MODULE_OVERVIEW.md | API_REGISTRY.md | CHANGELOG.md |
+| cpp-native | MODULE_OVERVIEW.md | ALGORITHM_REGISTRY.md | CHANGELOG.md |
+| docker-compose | MODULE_OVERVIEW.md | NETWORK_ENV.md | CHANGELOG.md |
+| frontend | MODULE_OVERVIEW.md | PAGE_REGISTRY.md | CHANGELOG.md |
+| java-backend | MODULE_OVERVIEW.md | DATABASE_SCHEMA.md | CHANGELOG.md |
+| python-agents | MODULE_OVERVIEW.md | AGENT_REGISTRY.md | CHANGELOG.md |
+
+**Agent 行为规则**：
+- 执行任务前：必须阅读模块 `.agent/MODULE_OVERVIEW.md`
+- 执行任务后：必须更新 `.agent/CHANGELOG.md`
+- 详见 AGENTS.md §7「模块 Agent 文档规范」
 
 ---
 
@@ -894,6 +918,75 @@ GET /v1/maintenance/health/1
 
 ---
 
+## 八-B、Python Execution Agent API
+
+### 8B.1 基础信息
+
+- **服务名称**: agent-execution
+- **技术栈**: FastAPI + SQLAlchemy
+- **端口**: 8006
+- **依赖服务**: PostgreSQL (5432)
+
+### 8B.2 执行管理API
+
+#### 8B.2.1 创建执行指令
+
+**端点**: `POST /api/agent/execution/command`
+
+**请求体**:
+```json
+{
+  "command_type": "MAINTENANCE",
+  "target_device_id": 1,
+  "description": "更换轴承",
+  "priority": "HIGH",
+  "assigned_to": "维修组A"
+}
+```
+
+**响应示例**:
+```json
+{
+  "command_id": "CMD-20260711-001",
+  "status": "PENDING",
+  "message": "指令创建成功"
+}
+```
+
+---
+
+#### 8B.2.2 审批执行指令
+
+**端点**: `POST /api/agent/execution/approve`
+
+**请求体**:
+```json
+{
+  "command_id": "CMD-20260711-001",
+  "approved": true,
+  "approver": "张工",
+  "comment": "同意执行"
+}
+```
+
+---
+
+#### 8B.2.3 上报执行进度
+
+**端点**: `POST /api/agent/execution/progress`
+
+**请求体**:
+```json
+{
+  "command_id": "CMD-20260711-001",
+  "progress_percent": 50,
+  "status": "IN_PROGRESS",
+  "remark": "轴承已拆卸，准备安装新件"
+}
+```
+
+---
+
 ## 九、LM Studio API
 
 ### 9.1 基础信息
@@ -1005,7 +1098,7 @@ Password: smt123
 **连接信息**:
 ```
 Host: localhost (docker: smt-redis)
-Port: 6379
+Port: 6380
 Password: root
 ```
 
@@ -1086,36 +1179,38 @@ curl -X POST http://localhost:8004/v1/knowledge/cases/search \
 curl -X POST http://localhost:8001/v1/scheduler/suggest \
   -H "Content-Type: application/json" \
   -d '{"orders":["ORD-20260707-001"],"constraints":{"production_lines":["LINE-1"]}}'
+
+# 8. 创建执行指令
+curl -X POST http://localhost:8006/api/agent/execution/command \
+  -H "Content-Type: application/json" \
+  -d '{"command_type":"MAINTENANCE","target_device_id":1,"description":"更换轴承","priority":"HIGH"}'
 ```
 
 ---
 
 ## 十二、开发状态与已知问题
 
-### 12.1 已完成功能（Phase 1-2）
+### 12.1 已完成功能（Phase 1-3）
 
 | 服务 | 功能 | 状态 |
 |------|------|------|
+| Java Gateway | API网关路由 | ✅ 完成 |
 | Java device-service | 设备CRUD + 健康检查 | ✅ 完成 |
-| Maintenance Agent | 设备健康诊断框架 | ✅ 完成 |
-| Knowledge Agent | 知识检索框架 | ✅ 完成 |
+| Scheduler Agent | 订单管理 + 排产建议 | ✅ 完成 |
+| Maintenance Agent | 设备健康诊断 + 故障诊断 | ✅ 完成 |
+| Quality Agent | 质量告警 + 根因分析 | ✅ 完成 |
+| Knowledge Agent | 知识检索 + RAG问答 | ✅ 完成 |
+| Orchestrator Agent | 多Agent编排 | ✅ 完成 |
+| Execution Agent | 执行指令管理 | ✅ 完成 |
 | LM Studio集成 | OpenAI兼容API | ✅ 完成 |
+| 模块Agent文档 | 18个文档文件 | ✅ 完成 |
 
-### 12.2 开发中功能（Phase 3）
+### 12.2 开发中功能（Phase 4）
 
-| 服务 | 功能 | 问题 |
+| 服务 | 功能 | 说明 |
 |------|------|------|
-| Scheduler Agent | 订单管理 + 排产建议 | ⚠️ 字段映射错误（order_id vs order_no） |
-| Quality Agent | 告警管理 + 根因分析 | ⚠️ 字段映射可能错误 |
-| Orchestrator Agent | 多Agent编排 | ⚠️ 依赖Scheduler/Maintenance问题 |
-
-### 12.3 待开发功能（Phase 4-5）
-
-| 功能 | 预计Phase | 说明 |
-|------|----------|------|
-| 前端可视化 | Phase 4 | React + Ant Design |
-| C++原生层 | Phase 5 | 高性能数据处理 |
-| Kafka事件总线 | Phase 4 | 实时事件驱动 |
+| Frontend | React前端界面 | 页面开发中 |
+| C++ Native | 高性能算法库 | 待开发 |
 
 ---
 
@@ -1159,11 +1254,13 @@ uv run uvicorn agent-maintenance.main:app --port 8002 &
 uv run uvicorn agent-quality.main:app --port 8003 &
 uv run uvicorn agent-knowledge.main:app --port 8004 &
 uv run uvicorn agent-orchestrator.main:app --port 8005 &
+uv run uvicorn agent-execution.main:app --port 8006 &
 ```
+
 
 ---
 
-**文档版本**: v1.0
-**最后更新**: 2026-07-07 23:55
+**文档版本**: v1.1
+**最后更新**: 2026-07-11
 **维护者**: SMT Platform Team
-**状态**: Phase 3开发中
+**状态**: Phase 3-4 开发中
