@@ -101,7 +101,7 @@ fi
 
 # 4. LM Studio大模型服务
 test_api "LM Studio认证" \
-    "curl -s $LLM_BASE_URL/v1/models -H 'Authorization: Bearer $LLM_API_KEY'" \
+    "curl -s $LLM_BASE_URL/models -H 'Authorization: Bearer $LLM_API_KEY'" \
     "data"
 
 # 5. Scheduler Agent订单查询

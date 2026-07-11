@@ -28,13 +28,14 @@ echo -e "${CYAN}=========================================="
 echo "  即将停止以下服务："
 echo -e "==========================================${NC}"
 echo "  应用服务（按 PID 文件 + 端口双策略）："
-echo "    Java device-service  (端口 $DEVICE_SERVICE_PORT)"
+echo "    Java device-service   (端口 $DEVICE_SERVICE_PORT)"
 echo "    Java smt-gateway      (端口 $GATEWAY_PORT)"
 echo "    agent-scheduler       (端口 $SCHEDULER_PORT)"
 echo "    agent-maintenance     (端口 $MAINTENANCE_PORT)"
 echo "    agent-quality         (端口 $QUALITY_PORT)"
 echo "    agent-knowledge       (端口 $KNOWLEDGE_PORT)"
 echo "    agent-orchestrator    (端口 $ORCHESTRATOR_PORT)"
+echo "    agent-execution       (端口 $EXECUTION_PORT)"
 echo "  中间件 Docker 容器："
 echo "    postgres / redis / mosquitto / influxdb"
 echo "    milvus / etcd / minio / kafka / zookeeper"
@@ -88,7 +89,7 @@ for module in smt-device-service smt-gateway; do
         if kill -0 "$pid" 2>/dev/null; then
             info "  停止 ${module} (pid=$pid)..."
             kill "$pid" 2>/dev/null || true
-            sleep 1
+            sleep 3
             if kill -0 "$pid" 2>/dev/null; then
                 warn "  ${module} 未响应 SIGTERM，发送 SIGKILL..."
                 kill -9 "$pid" 2>/dev/null || true

@@ -83,7 +83,7 @@ uv run uvicorn agent-maintenance.main:app --port "$MAINTENANCE_PORT" --host "$BI
 echo $! > "$LOG_DIR/agent-maintenance.pid"
 
 # orchestrator 依赖 maintenance/quality/scheduler，因此最后启动
-echo "启动 agent-scheduler ($SCHEDULER_HOST:$SCHEDULER_PORT_PORT)..."
+echo "启动 agent-scheduler ($SCHEDULER_HOST:$SCHEDULER_PORT)..."
 uv run uvicorn agent-scheduler.main:app --port "$SCHEDULER_PORT" --host "$BIND_HOST" > "$LOG_DIR/agent-scheduler.log" 2>&1 &
 echo $! > "$LOG_DIR/agent-scheduler.pid"
 

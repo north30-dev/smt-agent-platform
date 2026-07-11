@@ -3,7 +3,7 @@
 # 改端口改这里即可，所有脚本自动生效。
 # 用法：在脚本顶部 source 此文件：source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
 
-set -x
+# set -x
 
 # 安全加载 .env 文件（不回显内容，仅导出为环境变量）
 # 用法：load_env_file <绝对路径>
@@ -74,7 +74,7 @@ EXECUTION_HOST="${AGENT_EXECUTION_HOST:-localhost}"
 EXECUTION_PORT="${AGENT_EXECUTION_PORT:-8006}"      # agent-execution
 
 # 大模型服务 — 从 python-agents/.env 的 LLM_BASE_URL 读取
-LLM_BASE_URL="${LLM_BASE_URL:-http://192.168.116.1:1234/v1}"
+LLM_BASE_URL="${LLM_BASE_URL:-http://your-llm-base-url/v1}"
 # SEC-4：从环境变量读取，禁止硬编码密钥；未设置时仅告警，不阻断脚本
 LLM_API_KEY="${LLM_API_KEY:-}"
 if [ -z "$LLM_API_KEY" ]; then
