@@ -18,9 +18,13 @@ def test_llm_api_key_defaults_to_empty_string(monkeypatch):
     """LLM_API_KEY 缺失时 settings.llm_api_key 应为默认空字符串。
 
     守护 config.py 第 15 行 `llm_api_key: str = ""` 默认值行为。
+    确保生产环境忘记配置 API_KEY 时不会抛异常，而是优雅降级。
     """
     monkeypatch.delenv("LLM_API_KEY", raising=False)
+    # 禁用 .env 文件加载，确保只测试"环境变量不存在"这一场景
+    monkeypatch.setattr(Settings, "model_config", Settings.model_config.copy() | {"env_file": None})
     settings = Settings()
+    # 不应抛异常，且默认值为空字符串
     assert settings.llm_api_key == ""
 
 

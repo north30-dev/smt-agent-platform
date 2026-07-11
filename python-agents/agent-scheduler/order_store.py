@@ -108,7 +108,7 @@ async def update_order_status(order_id: int, status: str) -> None:
             "UPDATE production_orders SET status = $1, updated_at = $2 "
             "WHERE order_id = $3",
             status,
-            datetime.now(timezone.utc),
+            datetime.now(timezone.utc).replace(tzinfo=None),
             order_id,
         )
 

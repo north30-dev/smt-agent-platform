@@ -18,7 +18,7 @@ async def save_doc_meta(doc_id: str, doc_name: str) -> None:
             "ON CONFLICT (doc_id) DO UPDATE SET doc_name = $2",
             doc_id,
             doc_name,
-            datetime.now(timezone.utc),
+            datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
 

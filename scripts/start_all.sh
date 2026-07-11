@@ -119,7 +119,7 @@ bash "$PROJECT_ROOT/scripts/init_db.sh"
 # ========== 3. 初始化 Milvus Collections ==========
 info "初始化 Milvus Collections..."
 cd "$PROJECT_ROOT/python-agents"
-if uv run python -c "from shared import vector_store; vector_store.init_collections(1024)" 2>&1 | grep -q "Traceback"; then
+if uv run python -c "from shared import vector_store; vector_store.init_collections(768)" 2>&1 | grep -q "Traceback"; then
     error "Milvus collection 初始化失败"
     exit 1
 fi

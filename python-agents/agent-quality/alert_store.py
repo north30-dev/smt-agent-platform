@@ -43,7 +43,7 @@ async def save_alert(
             threshold,
             status,
             datapoint_code,
-            datetime.now(timezone.utc),
+            datetime.now(timezone.utc).replace(tzinfo=None),
         )
     return int(row["id"])
 

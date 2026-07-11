@@ -24,7 +24,7 @@
 | smt-gateway        | 8080 | API 网关（路由转发 + JWT 鉴权），统一代理设备服务与 Agent 接口               |
 | smt-device-service | 8081 | 设备台账 CRUD + OPC UA/MQTT 双通道数据采集 + 健康评分 + InfluxDB 时序双写 |
 
-### Python 智能体（5 个 Agent，19 个 REST 接口）
+### Python 智能体（6 个 Agent，27 个 REST 接口）
 
 | Agent              | 端口   | 接口                                                                     |
 | ------------------ | ---- | ---------------------------------------------------------------------- |
@@ -32,7 +32,8 @@
 | agent-maintenance  | 8002 | 设备健康评估、故障诊断（RAG + LLM）、预测性维护、故障案例入库                                    |
 | agent-quality      | 8003 | AOI 缺陷率监控、五要素根因分析、质量案例录入、告警分页查询                                        |
 | agent-scheduler    | 8001 | 订单录入/查询、智能排产计划生成、当前计划查询、急单插单响应                                         |
-| agent-orchestrator | 8005 | 设备故障 LangGraph 多 Agent 编排（maintenance→quality→scheduler→summary）、工作流查询 |
+| agent-orchestrator | 8005 | 设备故障 LangGraph 多 Agent 编排（maintenance→quality→scheduler→execution→summary）、工作流查询 |
+| agent-execution    | 8006 | 执行指令创建/查询/审批/进度更新、异常记录/查询/验证、Kafka 设备异常事件消费                            |
 
 ### 网关路由
 
@@ -44,6 +45,7 @@
 | `/api/agent/v1/quality/**`         | agent-quality:8003      | JWT | 2           |
 | `/api/agent/v1/scheduler/**`       | agent-scheduler:8001    | JWT | 2           |
 | `/api/agent/v1/orchestrator/**`    | agent-orchestrator:8005 | JWT | 2           |
+| `/api/agent/v1/execution/**`       | agent-execution:8006    | JWT | 2           |
 
 ### 中间件（9 个 Docker 服务）
 

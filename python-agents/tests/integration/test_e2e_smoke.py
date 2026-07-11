@@ -20,12 +20,18 @@ GATEWAY_BASE = os.getenv("E2E_GATEWAY_BASE", "http://localhost:8080")
 
 
 def _service_available(url: str) -> bool:
-    """检查服务是否可达（3 秒超时）。"""
-    try:
-        resp = httpx.get(f"{url}/docs", timeout=3.0)
-        return resp.status_code < 500
-    except Exception:
-        return False
+    """检查服务是否可达（3 秒超时）。
+
+    FastAPI 用 /docs，Spring Boot 用 /actuator/health。
+    """
+    for path in ("/docs", "/actuator/health", "/healthz"):
+        try:
+            resp = httpx.get(f"{url}{path}", timeout=3.0)
+            if resp.status_code < 500:
+                return True
+        except Exception:
+            continue
+    return False
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +49,7 @@ def test_knowledge_upload_and_ask_e2e():
     """
     sample_content = "# SMT 维护手册\n\n钢网清洁：每班次生产结束后使用专用清洗剂。".encode("utf-8")
     upload_resp = httpx.post(
-        f"{KNOWLEDGE_BASE}/knowledge/upload",
+        f"{KNOWLEDGE_BASE}/v1/knowledge/upload",
         files={"file": ("e2e_sample.md", sample_content, "text/markdown")},
         timeout=30.0,
     )
@@ -52,7 +58,7 @@ def test_knowledge_upload_and_ask_e2e():
     assert doc_id
 
     ask_resp = httpx.post(
-        f"{KNOWLEDGE_BASE}/knowledge/ask",
+        f"{KNOWLEDGE_BASE}/v1/knowledge/ask",
         json={"question": "钢网清洁频率是多少？"},
         timeout=60.0,
     )
