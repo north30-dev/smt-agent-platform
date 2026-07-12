@@ -133,7 +133,7 @@ async def close_pool() -> None:
 # ===========================================================================
 # Phase 4 执行闭环表：execution_instructions / exception_records / approvals
 #
-# 三张表均由 init_execution_tables() 幂等创建，DDL 见 shared/db_schema.sql。
+# 三张表均由 init_execution_tables() 幂等创建，DDL 见 database/init/01-schema.sql。
 # CRUD 遵循 init_workflow_table / save_workflow / get_workflow 模式：
 # - 通过共享 get_pg_pool() 获取连接池；
 # - JSONB 字段 json.dumps(ensure_ascii=False) + $N::jsonb 显式转换；

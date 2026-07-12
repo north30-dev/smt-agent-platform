@@ -8,7 +8,7 @@
 涉及两张表：
 - production_orders：订单数据
 - production_plans：排产计划
-DDL 见 shared/db_schema.sql。
+DDL 见 database/init/01-schema.sql。
 """
 
 import json

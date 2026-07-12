@@ -16,11 +16,11 @@ bash scripts/api_integration_test.sh
 
 ### 15.2 数据库初始化脚本
 
-**位置**: `docker-compose/init/`
+**位置**: `database/init/`
 
 ```bash
-docker exec -i smt-postgres psql -U smt -d smt < docker-compose/init/01-schema.sql
-docker exec -i smt-postgres psql -U smt -d smt < docker-compose/init/02-seed-devices.sql
+docker exec -i smt-postgres psql -U smt -d smt < database/init/01-schema.sql
+docker exec -i smt-postgres psql -U smt -d smt < database/init/02-seed-devices.sql
 ```
 
 ### 15.3 服务重启命令

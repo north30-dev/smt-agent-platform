@@ -1,0 +1,25 @@
+-- 质量基线参数种子数据
+-- 定义各设备的 AOI/SPI 缺陷率阈值，供 agent-quality 质量监控使用
+-- ⚠️ 手动执行：docker exec -i smt-postgres psql -U smt -d smt < database/seeds/04-seed-quality-baseline.sql
+-- 前置条件：device 表已有 4 台设备（device_id = 1~4）
+--
+-- 说明：当前 quality_alerts 表无基线配置字段，阈值由 agent-quality 的配置文件管理。
+-- 此脚本预留未来扩展（如 device_quality_baseline 表），目前仅插入注释说明。
+-- 如需启用，取消下方 CREATE TABLE 和 INSERT 的注释即可。
+
+-- -- 质量基线配置表（预留）
+-- CREATE TABLE IF NOT EXISTS device_quality_baseline (
+--     id              BIGSERIAL    PRIMARY KEY,
+--     device_id       BIGINT       NOT NULL UNIQUE,
+--     defect_rate_warn    DOUBLE PRECISION NOT NULL DEFAULT 0.02,   -- 预警阈值 2%
+--     defect_rate_alarm   DOUBLE PRECISION NOT NULL DEFAULT 0.05,   -- 告警阈值 5%
+--     created_at      TIMESTAMP    NOT NULL DEFAULT NOW()
+-- );
+--
+-- INSERT INTO device_quality_baseline (device_id, defect_rate_warn, defect_rate_alarm)
+-- VALUES
+--     (1, 0.02, 0.05),   -- 贴片机A
+--     (2, 0.01, 0.03),   -- 回流焊B
+--     (3, 0.03, 0.08),   -- AOI检测仪C
+--     (4, 0.02, 0.05)    -- SPI检测仪D
+-- ON CONFLICT (device_id) DO NOTHING;

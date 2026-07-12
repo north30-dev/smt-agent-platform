@@ -1,10 +1,10 @@
--- Phase 1-2 原始 DDL 来源（device/device_data_point/device_data/doc_meta 四表）。
--- Docker 环境实际初始化使用 docker-compose/init/01-schema.sql。
+-- 此文件为数据库唯一 DDL 入口，包含全部 11 张表定义与索引。
+-- 全新环境 docker compose up 后，PostgreSQL 镜像通过 /docker-entrypoint-initdb.d 自动按字母序执行
+-- database/init/01-schema.sql → 02-seed-devices.sql，确保所有表与种子数据就位。
+-- 手动初始化（已有数据卷场景）：bash scripts/init_db.sh
+
 -- =============================================================================
--- SMT 设备服务数据库初始化脚本（PostgreSQL）
---
--- 创建 device、device_data_point、device_data 三张表及索引，含中文注释。
--- 字段与 smt-device-service 实体严格对齐。
+-- Phase 1-2 表
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -85,7 +85,7 @@ COMMENT ON COLUMN device_data.value IS '数据值（统一用字符串传输，�
 COMMENT ON COLUMN device_data.timestamp IS '数据采集时间';
 
 -- -----------------------------------------------------------------------------
--- 索引
+-- 索引（Phase 1-2）
 -- -----------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_device_data_point_device_id ON device_data_point (device_id);
 CREATE INDEX IF NOT EXISTS idx_device_data_query ON device_data (device_id, datapoint_code, timestamp);
@@ -105,3 +105,63 @@ COMMENT ON COLUMN doc_meta.doc_id IS '文档唯一标识（与 Milvus 中 doc_id
 COMMENT ON COLUMN doc_meta.doc_name IS '原始文件名';
 COMMENT ON COLUMN doc_meta.create_time IS '入库时间';
 
+-- =============================================================================
+-- Phase 3 表
+-- =============================================================================
+-- 集中维护 Phase 3 新增的 quality_alerts、production_orders、production_plans 三张表 DDL
+
+-- 质量告警记录表（agent-quality 写入）
+CREATE TABLE IF NOT EXISTS quality_alerts (
+    id BIGSERIAL PRIMARY KEY,
+    device_id BIGINT NOT NULL,
+    defect_rate DOUBLE PRECISION NOT NULL,
+    threshold DOUBLE PRECISION NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    datapoint_code VARCHAR(64),
+    alert_time TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_quality_alerts_device_id ON quality_alerts(device_id);
+CREATE INDEX IF NOT EXISTS idx_quality_alerts_alert_time ON quality_alerts(alert_time);
+
+-- 订单表（agent-scheduler 写入）
+CREATE TABLE IF NOT EXISTS production_orders (
+    order_id BIGSERIAL PRIMARY KEY,
+    order_no VARCHAR(64) NOT NULL UNIQUE,
+    product_model VARCHAR(64) NOT NULL,
+    quantity INTEGER NOT NULL,
+    priority VARCHAR(16) NOT NULL DEFAULT 'NORMAL',
+    delivery_date DATE NOT NULL,
+    material_ready BOOLEAN NOT NULL DEFAULT FALSE,
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    source VARCHAR(32) NOT NULL DEFAULT 'user',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_production_orders_status ON production_orders(status);
+CREATE INDEX IF NOT EXISTS idx_production_orders_priority ON production_orders(priority);
+CREATE INDEX IF NOT EXISTS idx_production_orders_delivery_date ON production_orders(delivery_date);
+CREATE INDEX IF NOT EXISTS idx_production_orders_source ON production_orders(source);
+
+-- 排产计划表（agent-scheduler 写入）
+CREATE TABLE IF NOT EXISTS production_plans (
+    plan_id BIGSERIAL PRIMARY KEY,
+    plan_version INTEGER NOT NULL,
+    allocations JSONB NOT NULL,
+    description TEXT,
+    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_production_plans_status ON production_plans(status);
+CREATE INDEX IF NOT EXISTS idx_production_plans_created_at ON production_plans(created_at);
+
+-- =============================================================================
+-- Phase 3 修复：工作流持久化（orchestrator 工作流从内存迁移到 PG）
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS workflows (
+    workflow_id VARCHAR(64) PRIMARY KEY,
+    status VARCHAR(16) NOT NULL,
+    data JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_workflows_created_at ON workflows(created_at);
