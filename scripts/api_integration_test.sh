@@ -312,7 +312,7 @@ if [ -n "$INSTR_ID_CRIT" ]; then
     INSTR_APPROVE=$(curl -s -X POST \
       "$EXECUTION_BASE/v1/execution/instructions/$INSTR_ID_CRIT/approve" \
       -H 'Content-Type: application/json' \
-      -d '{"decision":"approve","approver":"test","comment":"ok"}')
+      -d '{"decision":"APPROVE","approver":"test","comment":"ok"}')
     if echo "$INSTR_APPROVE" | grep -q '"APPROVED"'; then
         echo "✅ 测试通过"
         PASS_TESTS=$((PASS_TESTS + 1))
