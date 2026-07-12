@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from shared import db
 from shared.config import settings
+from shared.observability import get_counter
 
 from .models import (
     InstructionCreateRequest,
@@ -107,6 +108,10 @@ async def create_instructions(req: InstructionCreateRequest) -> list[dict]:
             auto_execute=auto_execute,
         )
         created.append(record)
+        _instruction_created_counter = get_counter(
+            "instruction_created_total", "创建的执行指令总数"
+        )
+        _instruction_created_counter.inc()
     return created
 
 
@@ -119,14 +124,14 @@ async def list_instructions(
     page: int = 1,
     size: int = 20,
     status: str | None = None,
-    type: str | None = None,
+    instruction_type: str | None = None,
 ) -> dict:
     """分页查询指令，委托 db.list_instructions。
 
     Returns:
         {records, total, page, size}
     """
-    return await db.list_instructions(page, size, status, type)
+    return await db.list_instructions(page, size, status, instruction_type)
 
 
 async def update_progress(instruction_id: str, req: ProgressRequest) -> dict:

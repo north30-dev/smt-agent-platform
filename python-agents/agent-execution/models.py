@@ -54,8 +54,8 @@ class ExceptionStatus(str, Enum):
 class ApprovalDecision(str, Enum):
     """审批决定。"""
 
-    approve = "approve"
-    reject = "reject"
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
 
 
 # ---------------------------------------------------------------------------

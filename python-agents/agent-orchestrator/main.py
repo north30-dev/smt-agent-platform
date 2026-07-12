@@ -27,6 +27,7 @@ from shared.models import ErrorResponse
 from shared.observability import (
     get_logger,
     register_health_endpoint,
+    register_metrics_endpoint,
     setup_logging,
 )
 
@@ -76,35 +77,36 @@ app = FastAPI(
 setup_logging(settings.log_level)
 logger = get_logger("agent-orchestrator")
 register_health_endpoint(app, "agent-orchestrator")
+register_metrics_endpoint(app)
+
+
+# 参与状态判定的节点列表（不含 execution/summary，二者不影响状态判定）
+_STATUS_NODES = ["diagnosis", "quality_assessment", "schedule_adjustment"]
 
 
 def _determine_status(result: dict) -> str:
     """根据结果判定工作流状态。
 
-    - SUCCESS: 无 errors，且三个子 Agent 结果均存在且非 skipped
+    - SUCCESS: 无 errors，且 _STATUS_NODES 中所有节点结果均存在且非 skipped
     - PARTIAL: 部分节点失败但至少一个成功
     - FAILED: 全部节点失败
+
+    新增节点时只需更新 _STATUS_NODES 列表。
     """
     errors = result.get("errors") or {}
-    diagnosis = result.get("diagnosis")
-    quality = result.get("quality_assessment")
-    schedule = result.get("schedule_adjustment")
 
-    # 各节点是否成功
-    maintenance_ok = bool(diagnosis) and not (
-        isinstance(diagnosis, dict) and diagnosis.get("status") == "skipped"
-    )
-    quality_ok = bool(quality) and not (
-        isinstance(quality, dict) and quality.get("status") == "skipped"
-    )
-    scheduler_ok = bool(schedule) and not (
-        isinstance(schedule, dict) and schedule.get("status") == "skipped"
-    )
+    node_results = []
+    for key in _STATUS_NODES:
+        value = result.get(key)
+        ok = bool(value) and not (
+            isinstance(value, dict) and value.get("status") == "skipped"
+        )
+        node_results.append(ok)
 
-    success_count = sum([maintenance_ok, quality_ok, scheduler_ok])
+    success_count = sum(node_results)
     error_count = len(errors)
 
-    if error_count == 0 and success_count == 3:
+    if error_count == 0 and success_count == len(_STATUS_NODES):
         return "SUCCESS"
     if success_count == 0:
         return "FAILED"
@@ -120,6 +122,7 @@ async def _run_device_fault_workflow(device_id: int, symptom: str) -> WorkflowRe
     initial_state = {
         "device_id": device_id,
         "symptom": symptom,
+        "workflow_id": workflow_id,
         "diagnosis": None,
         "quality_assessment": None,
         "schedule_adjustment": None,

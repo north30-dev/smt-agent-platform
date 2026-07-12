@@ -1,7 +1,7 @@
 """approval_service 业务逻辑单元测试。
 
 不触达真实 PostgreSQL：通过 monkeypatch 替换 approval_service.db 上的
-get_instruction / update_instruction_status / create_approval，验证：
+get_instruction / update_instruction_status_and_create_approval，验证：
 1. approve（PENDING_APPROVAL → APPROVED）+ 写审批记录；
 2. reject（PENDING_APPROVAL → REJECTED）；
 3. PENDING 状态也可审批；
@@ -37,25 +37,11 @@ def _fake_instruction(**overrides) -> dict:
     return base
 
 
-def _fake_approval(**overrides) -> dict:
-    base = {
-        "id": 1,
-        "instruction_id": "instr-fixture",
-        "decision": "approve",
-        "approver": "system",
-        "comment": None,
-        "created_at": "2026-07-09T10:00:00+00:00",
-    }
-    base.update(overrides)
-    return base
-
-
 @pytest.fixture
 def mock_db(monkeypatch):
     mocks = {
         "get_instruction": AsyncMock(return_value=None),
-        "update_instruction_status": AsyncMock(),
-        "create_approval": AsyncMock(),
+        "update_instruction_status_and_create_approval": AsyncMock(),
     }
     for name, m in mocks.items():
         monkeypatch.setattr(approval_service.db, name, m)
@@ -72,30 +58,25 @@ async def test_approve_pending_approval_to_approved(mock_db):
     mock_db["get_instruction"].return_value = _fake_instruction(
         status="PENDING_APPROVAL"
     )
-    mock_db["update_instruction_status"].return_value = _fake_instruction(
-        status="APPROVED"
+    mock_db["update_instruction_status_and_create_approval"].return_value = (
+        _fake_instruction(status="APPROVED")
     )
-    mock_db["create_approval"].return_value = _fake_approval(decision="approve")
 
     req = ApprovalRequest(
-        decision=ApprovalDecision.approve,
+        decision=ApprovalDecision.APPROVE,
         approver="user-001",
         comment="同意执行",
     )
     result = await approval_service.approve("instr-1", req)
 
     assert result["status"] == "APPROVED"
-    # update_status 调用
-    mock_db["update_instruction_status"].assert_awaited_once_with(
-        "instr-1", "APPROVED"
+    mock_db["update_instruction_status_and_create_approval"].assert_awaited_once_with(
+        instruction_id="instr-1",
+        new_status="APPROVED",
+        decision="APPROVE",
+        approver="user-001",
+        comment="同意执行",
     )
-    # create_approval 调用
-    mock_db["create_approval"].assert_awaited_once()
-    call = mock_db["create_approval"].call_args
-    assert call.kwargs["instruction_id"] == "instr-1"
-    assert call.kwargs["decision"] == "approve"
-    assert call.kwargs["approver"] == "user-001"
-    assert call.kwargs["comment"] == "同意执行"
 
 
 async def test_reject_pending_approval_to_rejected(mock_db):
@@ -103,34 +84,31 @@ async def test_reject_pending_approval_to_rejected(mock_db):
     mock_db["get_instruction"].return_value = _fake_instruction(
         status="PENDING_APPROVAL"
     )
-    mock_db["update_instruction_status"].return_value = _fake_instruction(
-        status="REJECTED"
+    mock_db["update_instruction_status_and_create_approval"].return_value = (
+        _fake_instruction(status="REJECTED")
     )
-    mock_db["create_approval"].return_value = _fake_approval(decision="reject")
 
     req = ApprovalRequest(
-        decision=ApprovalDecision.reject,
+        decision=ApprovalDecision.REJECT,
         approver="user-002",
         comment="风险过高",
     )
     result = await approval_service.approve("instr-1", req)
 
     assert result["status"] == "REJECTED"
-    mock_db["update_instruction_status"].assert_awaited_once_with(
-        "instr-1", "REJECTED"
-    )
-    assert mock_db["create_approval"].call_args.kwargs["decision"] == "reject"
+    call = mock_db["update_instruction_status_and_create_approval"].call_args
+    assert call.kwargs["new_status"] == "REJECTED"
+    assert call.kwargs["decision"] == "REJECT"
 
 
 async def test_approve_pending_status(mock_db):
     """PENDING 状态也可审批（仅 PENDING_APPROVAL / PENDING 可审批）。"""
     mock_db["get_instruction"].return_value = _fake_instruction(status="PENDING")
-    mock_db["update_instruction_status"].return_value = _fake_instruction(
-        status="APPROVED"
+    mock_db["update_instruction_status_and_create_approval"].return_value = (
+        _fake_instruction(status="APPROVED")
     )
-    mock_db["create_approval"].return_value = _fake_approval()
 
-    req = ApprovalRequest(decision=ApprovalDecision.approve)
+    req = ApprovalRequest(decision=ApprovalDecision.APPROVE)
     result = await approval_service.approve("instr-1", req)
     assert result["status"] == "APPROVED"
 
@@ -140,15 +118,15 @@ async def test_approve_default_approver(mock_db):
     mock_db["get_instruction"].return_value = _fake_instruction(
         status="PENDING_APPROVAL"
     )
-    mock_db["update_instruction_status"].return_value = _fake_instruction(
-        status="APPROVED"
+    mock_db["update_instruction_status_and_create_approval"].return_value = (
+        _fake_instruction(status="APPROVED")
     )
-    mock_db["create_approval"].return_value = _fake_approval(approver="system")
 
-    req = ApprovalRequest(decision=ApprovalDecision.approve)
+    req = ApprovalRequest(decision=ApprovalDecision.APPROVE)
     await approval_service.approve("instr-1", req)
 
-    assert mock_db["create_approval"].call_args.kwargs["approver"] == "system"
+    call = mock_db["update_instruction_status_and_create_approval"].call_args
+    assert call.kwargs["approver"] == "system"
 
 
 # ---------------------------------------------------------------------------
@@ -159,18 +137,16 @@ async def test_approve_default_approver(mock_db):
 async def test_approve_already_approved_raises(mock_db):
     """双重审批：已 APPROVED → ValueError（指令不在待审批状态）。"""
     mock_db["get_instruction"].return_value = _fake_instruction(status="APPROVED")
-    req = ApprovalRequest(decision=ApprovalDecision.approve)
+    req = ApprovalRequest(decision=ApprovalDecision.APPROVE)
     with pytest.raises(ValueError, match="指令不在待审批状态"):
         await approval_service.approve("instr-1", req)
-    # 不应触发 update / create_approval
-    mock_db["update_instruction_status"].assert_not_awaited()
-    mock_db["create_approval"].assert_not_awaited()
+    mock_db["update_instruction_status_and_create_approval"].assert_not_awaited()
 
 
 async def test_approve_completed_raises(mock_db):
     """COMPLETED 状态不可审批 → ValueError。"""
     mock_db["get_instruction"].return_value = _fake_instruction(status="COMPLETED")
-    req = ApprovalRequest(decision=ApprovalDecision.approve)
+    req = ApprovalRequest(decision=ApprovalDecision.APPROVE)
     with pytest.raises(ValueError, match="指令不在待审批状态"):
         await approval_service.approve("instr-1", req)
 
@@ -178,7 +154,7 @@ async def test_approve_completed_raises(mock_db):
 async def test_approve_executing_raises(mock_db):
     """EXECUTING 状态不可审批 → ValueError。"""
     mock_db["get_instruction"].return_value = _fake_instruction(status="EXECUTING")
-    req = ApprovalRequest(decision=ApprovalDecision.reject)
+    req = ApprovalRequest(decision=ApprovalDecision.REJECT)
     with pytest.raises(ValueError, match="指令不在待审批状态"):
         await approval_service.approve("instr-1", req)
 
@@ -186,7 +162,7 @@ async def test_approve_executing_raises(mock_db):
 async def test_approve_rejected_raises(mock_db):
     """已 REJECTED 不可再审批 → ValueError。"""
     mock_db["get_instruction"].return_value = _fake_instruction(status="REJECTED")
-    req = ApprovalRequest(decision=ApprovalDecision.approve)
+    req = ApprovalRequest(decision=ApprovalDecision.APPROVE)
     with pytest.raises(ValueError, match="指令不在待审批状态"):
         await approval_service.approve("instr-1", req)
 
@@ -199,20 +175,18 @@ async def test_approve_rejected_raises(mock_db):
 async def test_approve_not_found_raises(mock_db):
     """指令不存在 → ValueError。"""
     mock_db["get_instruction"].return_value = None
-    req = ApprovalRequest(decision=ApprovalDecision.approve)
+    req = ApprovalRequest(decision=ApprovalDecision.APPROVE)
     with pytest.raises(ValueError, match="指令不存在"):
         await approval_service.approve("instr-missing", req)
-    mock_db["update_instruction_status"].assert_not_awaited()
-    mock_db["create_approval"].assert_not_awaited()
+    mock_db["update_instruction_status_and_create_approval"].assert_not_awaited()
 
 
 async def test_approve_update_returns_none_raises(mock_db):
-    """get 命中但 update 返回 None（竞态删除）→ ValueError，不写审批记录。"""
+    """get 命中但事务函数返回 None（竞态删除）→ ValueError。"""
     mock_db["get_instruction"].return_value = _fake_instruction(
         status="PENDING_APPROVAL"
     )
-    mock_db["update_instruction_status"].return_value = None
-    req = ApprovalRequest(decision=ApprovalDecision.approve)
+    mock_db["update_instruction_status_and_create_approval"].return_value = None
+    req = ApprovalRequest(decision=ApprovalDecision.APPROVE)
     with pytest.raises(ValueError, match="指令不存在"):
         await approval_service.approve("instr-1", req)
-    mock_db["create_approval"].assert_not_awaited()

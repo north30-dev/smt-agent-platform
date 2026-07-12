@@ -906,35 +906,35 @@ POST /v1/execution/exceptions/{id}/verify
 
 | 级别 | 编号 | 问题 | 状态 | 来源 |
 |---|---|---|---|---|
-| 🔴 P0 | P0-1 | `kafka_consumer.py` 硬编码 orchestrator 基地址，跨环境部署需手动修改源码 | 未修复 | [`code-review#1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
-| 🔴 P0 | P0-2 | orchestrator 端到端 5 节点串行 = 5 次 LLM 调用 + 5 次 HTTP 往返 + RAG 检索，估算 6-36s | 未修复 | [`performance-eval#P0-1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase4.md) |
-| 🔴 P0 | P0-3 | 缺少 `/metrics` 端点，无 Prometheus 埋点，无法性能监控 | 未修复 | [`performance-eval#P0-2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase4.md) |
-| 🟠 P1 | P1-1 | `ApprovalDecision` 枚举值 `approve`/`reject` 大小写不一致 | 未修复 | [`code-review#2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
-| 🟠 P1 | P1-2 | `list_instructions` 的 `type` 参数名遮蔽 Python 内置 `type()` 函数 | 未修复 | [`code-review#3`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
-| 🟠 P1 | P1-3 | `execution_node` 中 `id(state)` 作为兜底 workflow_id 不可靠 | 未修复 | [`code-review#4`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
-| 🟠 P1 | P1-4 | `kafka_consumer` 缺少 `device_id` 存在性校验 | 未修复 | [`code-review#5`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
-| 🟠 P1 | P1-5 | Kafka 主题未在 docker-compose 中自动创建 | 未修复 | [`architecture-review#4.2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
-| 🟠 P1 | P1-6 | execution Agent 无可观测性埋点 | 未修复 | [`architecture-review#4.3`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
-| 🟠 P1 | P1-7 | 异常闭环状态机不完整（analyze_exception 路由未暴露、HANDLED 状态推进无 API） | 未修复 | [`prd-conformance#3.1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase4.md) |
-| 🟠 P1 | P1-8 | OpenAPI 响应字段与实现不一致（`auto_executable` vs `auto_execute`、字段缺失） | 未修复 | [`prd-conformance#3.2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase4.md) |
-| 🟡 P2 | P2-1 | `config.py` 审批规则列表字段缺少类型参数（`list`→`list[str]`） | 未修复 | [`code-review#6`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
-| 🟡 P2 | P2-2 | `instruction_service` 与 `approval_service` 事务边界缺失（update_status 与 create_approval 独立事务） | 未修复 | [`architecture-review#4.4`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
-| 🟡 P2 | P2-3 | `_determine_status` 硬编码节点计数（3 节点），新增节点需同步修改 | 未修复 | [`architecture-review#4.5`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
-| 🟡 P2 | P2-4 | Kafka 消费者线程模型在 `kafka_enabled=False` 时不关闭，持续占用资源 | 未修复 | [`performance-eval#P2-1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase4.md) |
-| 🟡 P2 | P2-5 | `doc_meta_store.py` / `alert_store.py` / `order_store.py` 三处 `device_client` 重复代码仍未抽取 | 未修复 | [`architecture-review#5.1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
-| 🟡 MEDIUM | SEC-1 | `kafka_client.py` 未配置 SSL/TLS，生产环境需 SASL 认证 | 未修复 | [`security-scan#F1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/security-scan-phase4.md) |
+| 🔴 P0 | P0-1 | `kafka_consumer.py` 硬编码 orchestrator 基地址，跨环境部署需手动修改源码 | ✅ 已修复：添加 `agent_orchestrator_base_url` 配置项，从 `settings` 读取 | [`code-review#1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
+| 🔴 P0 | P0-2 | orchestrator 端到端 5 节点串行 = 5 次 LLM 调用 + 5 次 HTTP 往返 + RAG 检索，估算 6-36s | 🔄 需架构重构，延后处理 | [`performance-eval#P0-1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase4.md) |
+| 🔴 P0 | P0-3 | 缺少 `/metrics` 端点，无 Prometheus 埋点，无法性能监控 | ✅ 已修复：集成 `prometheus-fastapi-instrumentator`，注册 `/metrics` 端点 + 自定义业务 Counter | [`performance-eval#P0-2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase4.md) |
+| 🟠 P1 | P1-1 | `ApprovalDecision` 枚举值 `approve`/`reject` 大小写不一致 | ✅ 已修复：统一为 `APPROVE`/`REJECT` 大写枚举值 | [`code-review#2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
+| 🟠 P1 | P1-2 | `list_instructions` 的 `type` 参数名遮蔽 Python 内置 `type()` 函数 | ✅ 已修复：重命名为 `instruction_type` | [`code-review#3`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
+| 🟠 P1 | P1-3 | `execution_node` 中 `id(state)` 作为兜底 workflow_id 不可靠 | ✅ 已修复：使用 `uuid4` 生成兜底 ID，`workflow_id` 纳入 `OrchestratorState` | [`code-review#4`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
+| 🟠 P1 | P1-4 | `kafka_consumer` 缺少 `device_id` 存在性校验 | ✅ 已修复：添加 `device_id` None/类型校验 | [`code-review#5`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
+| 🟠 P1 | P1-5 | Kafka 主题未在 docker-compose 中自动创建 | ✅ 已修复：追加 `device.anomaly`/`execution.instruction`/`exception.record` 到 `KAFKA_CREATE_TOPICS` | [`architecture-review#4.2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
+| 🟠 P1 | P1-6 | execution Agent 无可观测性埋点 | ✅ 已修复：与 P0-3 合并处理，添加自定义 Counter 埋点 | [`architecture-review#4.3`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
+| 🟠 P1 | P1-7 | 异常闭环状态机不完整（analyze_exception 路由未暴露、HANDLED 状态推进无 API） | ✅ 已修复：添加 `/analyze` 和 `/handle` API 端点 | [`prd-conformance#3.1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase4.md) |
+| 🟠 P1 | P1-8 | OpenAPI 响应字段与实现不一致（`auto_executable` vs `auto_execute`、字段缺失） | ✅ 已修复：OpenAPI 合约统一为 `auto_execute` | [`prd-conformance#3.2`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase4.md) |
+| 🟡 P2 | P2-1 | `config.py` 审批规则列表字段缺少类型参数（`list`→`list[str]`） | ✅ 已修复：三个字段均改为 `list[str]` | [`code-review#6`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) |
+| 🟡 P2 | P2-2 | `instruction_service` 与 `approval_service` 事务边界缺失（update_status 与 create_approval 独立事务） | ✅ 已修复：新增 `update_instruction_status_and_create_approval` 事务函数 | [`architecture-review#4.4`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
+| 🟡 P2 | P2-3 | `_determine_status` 硬编码节点计数（3 节点），新增节点需同步修改 | ✅ 已修复：改为基于 `_STATUS_NODES` 列表动态计算 | [`architecture-review#4.5`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
+| 🟡 P2 | P2-4 | Kafka 消费者线程模型在 `kafka_enabled=False` 时不关闭，持续占用资源 | ✅ 已验证：当前逻辑正确（`kafka_enabled=False` 时不创建 task，`aclose` 时 `task=None` 直接跳过） | [`performance-eval#P2-1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase4.md) |
+| 🟡 P2 | P2-5 | `doc_meta_store.py` / `alert_store.py` / `order_store.py` 三处 `device_client` 重复代码仍未抽取 | ✅ 已修复：抽取 `fmt_ts`/`parse_jsonb` 公共函数到 `shared/db.py`，三处 store 改为调用公共函数 | [`architecture-review#5.1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) |
+| 🟡 MEDIUM | SEC-1 | `kafka_client.py` 未配置 SSL/TLS，生产环境需 SASL 认证 | ✅ 已修复：添加 `kafka_security_protocol`/`sasl_mechanism`/`sasl_username`/`sasl_password` 配置项 | [`security-scan#F1`](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/security-scan-phase4.md) |
 
 **跨报告重复项**：
 
-1. **orchestrator URL 硬编码**：[code-review#1](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) + [architecture-review#4.1](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) + [prd-conformance#3.4](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase4.md)（3 份报告提及）
-2. **无可观测性埋点**：[performance-eval#P0-2](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase4.md) + [architecture-review#4.3](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md)（2 份报告提及）
+1. **orchestrator URL 硬编码**：[code-review#1](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/code-review-phase4.md) + [architecture-review#4.1](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md) + [prd-conformance#3.4](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/prd-conformance-review-phase4.md)（3 份报告提及）— ✅ 已修复
+2. **无可观测性埋点**：[performance-eval#P0-2](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/performance-eval-phase4.md) + [architecture-review#4.3](file:///home/north30/projects/Personal/smt-agent-platform/.trae/reports/architecture-review-phase4.md)（2 份报告提及）— ✅ 已修复
 
 ### 6.3 延期至 Phase 5+ 的项目
 
 | 项目 | 延期阶段 | 原因 | 来源 |
 |---|---|---|---|
-| 异常闭环 API 补全（analyze_exception / handle 端点） | Phase 5 | spec 明确排除 | PRD §4.5 |
-| OpenAPI 响应字段对齐（auto_executable/approved_by/approved_at/completed_at） | Phase 5 | 需同步修改 Python 模型和 DB 表 | spec §排除项 |
+| orchestrator 串行编排改为并行/条件路由 | Phase 5 | 需架构重构 + PRD 确认并行策略，影响面大 | performance-eval#P0-1 |
+| OpenAPI 响应字段对齐（approved_by/approved_at/completed_at） | Phase 5 | 需同步修改 Python 模型和 DB 表 | spec §排除项 |
 | 前端可视化（ExecutionMonitor / ApprovalCenter 页面） | Phase 5 | spec 明确排除 | spec §排除项 |
 | Java smt-order-service / smt-quality-service / smt-notification-service / smt-agent-router | Phase 5 | spec 明确排除 | spec §排除项 |
 | gRPC 跨语言契约（`api-contracts/grpc/`） | Phase 5 | spec 明确排除 | spec §排除项 |

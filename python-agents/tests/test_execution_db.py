@@ -397,7 +397,7 @@ async def test_list_instructions_with_status_and_type_filter(fake_pool):
     ]
 
     result = await shared_db.list_instructions(
-        page=1, size=10, status="PENDING", type="PARAM_CHANGE"
+        page=1, size=10, status="PENDING", instruction_type="PARAM_CHANGE"
     )
 
     # COUNT SQL 含双 WHERE
@@ -895,27 +895,27 @@ async def test_get_approvals_by_instruction_empty(fake_pool):
 
 
 def test_parse_jsonb_handles_str_dict_list_none():
-    """_parse_jsonb 应兼容 str / dict / list / None。"""
-    assert shared_db._parse_jsonb(None) is None
-    assert shared_db._parse_jsonb('{"k": 1}') == {"k": 1}
-    assert shared_db._parse_jsonb({"k": 1}) == {"k": 1}
-    assert shared_db._parse_jsonb([1, 2]) == [1, 2]
+    """parse_jsonb 应兼容 str / dict / list / None。"""
+    assert shared_db.parse_jsonb(None) is None
+    assert shared_db.parse_jsonb('{"k": 1}') == {"k": 1}
+    assert shared_db.parse_jsonb({"k": 1}) == {"k": 1}
+    assert shared_db.parse_jsonb([1, 2]) == [1, 2]
     # 其它类型回退 None
-    assert shared_db._parse_jsonb(123) is None
+    assert shared_db.parse_jsonb(123) is None
 
 
 def test_fmt_ts_handles_naive_and_aware_datetime():
-    """_fmt_ts 无时区时按 UTC 处理，有时区时直接 ISO。"""
+    """fmt_ts 无时区时按 UTC 处理，有时区时直接 ISO。"""
     naive = datetime(2026, 7, 9, 10, 0, 0)
     aware = datetime(2026, 7, 9, 10, 0, 0, tzinfo=timezone.utc)
 
-    naive_str = shared_db._fmt_ts(naive)
+    naive_str = shared_db.fmt_ts(naive)
     assert naive_str == "2026-07-09T10:00:00+00:00"
 
-    aware_str = shared_db._fmt_ts(aware)
+    aware_str = shared_db.fmt_ts(aware)
     assert aware_str == "2026-07-09T10:00:00+00:00"
 
-    assert shared_db._fmt_ts(None) == ""
+    assert shared_db.fmt_ts(None) == ""
 
 
 def test_instruction_row_to_dict_maps_all_fields():

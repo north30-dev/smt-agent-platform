@@ -212,14 +212,14 @@ async def test_list_instructions(client, monkeypatch):
 
 
 async def test_list_instructions_passes_query_params(client, monkeypatch):
-    """list 接口应透传 page/size/status/type。"""
+    """list 接口应透传 page/size/status/instruction_type。"""
     list_mock = AsyncMock(
         return_value={"records": [], "total": 0, "page": 2, "size": 5}
     )
     monkeypatch.setattr(instruction_service.db, "list_instructions", list_mock)
 
     resp = await client.get(
-        "/v1/execution/instructions?page=2&size=5&status=PENDING&type=REPAIR"
+        "/v1/execution/instructions?page=2&size=5&status=PENDING&instruction_type=REPAIR"
     )
 
     assert resp.status_code == 200
@@ -337,30 +337,16 @@ async def test_approve_route_approve(client, monkeypatch):
     )
     monkeypatch.setattr(
         instruction_service.db,
-        "update_instruction_status",
+        "update_instruction_status_and_create_approval",
         AsyncMock(
             return_value=_fake_instruction_record(
                 instruction_id="instr-1", status="APPROVED"
             )
         ),
     )
-    monkeypatch.setattr(
-        instruction_service.db,
-        "create_approval",
-        AsyncMock(
-            return_value={
-                "id": 1,
-                "instruction_id": "instr-1",
-                "decision": "approve",
-                "approver": "system",
-                "comment": None,
-                "created_at": "2026-07-09T10:00:00+00:00",
-            }
-        ),
-    )
     resp = await client.post(
         "/v1/execution/instructions/instr-1/approve",
-        json={"decision": "approve", "approver": "system"},
+        json={"decision": "APPROVE", "approver": "system"},
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "APPROVED"
@@ -375,7 +361,7 @@ async def test_approve_route_not_pending_returns_400(client, monkeypatch):
     )
     resp = await client.post(
         "/v1/execution/instructions/instr-1/approve",
-        json={"decision": "approve"},
+        json={"decision": "APPROVE"},
     )
     assert resp.status_code == 400
     assert resp.json()["error"] == "invalid_param"

@@ -4,8 +4,6 @@
 遵循 agent-orchestrator/agent_clients.py 的模块级 httpx.AsyncClient 单例模式。
 Kafka 不可达时由 shared.kafka_client 降级为日志，本模块不抛异常。
 消息处理失败时记录异常记录（exception_records），不向上抛、不退出消费循环。
-
-orchestrator 基地址在 config.py 中无对应字段，使用模块常量 ORCHESTRATOR_URL。
 """
 
 import asyncio
@@ -14,10 +12,7 @@ import httpx
 
 from shared.config import settings
 from shared.kafka_client import start_consumer, stop_consumer
-from shared.observability import get_logger
-
-# orchestrator 基地址（config.py 未提供 agent_orchestrator_base_url）
-ORCHESTRATOR_URL = "http://localhost:8005"
+from shared.observability import get_counter, get_logger
 
 logger = get_logger("agent-execution.kafka")
 
@@ -65,9 +60,23 @@ async def _handle_device_anomaly(message: dict) -> None:
     try:
         device_id = message.get("device_id")
         symptom = message.get("symptom", "")
+
+        if device_id is None:
+            logger.warning(
+                "kafka.device_anomaly.missing_device_id",
+                message=str(message)[:200],
+            )
+            return
+        if not isinstance(device_id, int):
+            logger.warning(
+                "kafka.device_anomaly.invalid_device_id",
+                device_id=device_id,
+                device_id_type=type(device_id).__name__,
+            )
+            return
         client = _get_client()
         resp = await client.post(
-            f"{ORCHESTRATOR_URL}/v1/orchestrator/device_fault",
+            f"{settings.agent_orchestrator_base_url}/v1/orchestrator/device_fault",
             json={"device_id": device_id, "symptom": symptom},
         )
         resp.raise_for_status()
@@ -86,6 +95,10 @@ async def _handle_device_anomaly(message: dict) -> None:
             schedule_adjustment=schedule_adjustment,
         )
         await instruction_service.create_instructions(req)
+        _anomaly_handled_counter = get_counter(
+            "kafka_device_anomaly_handled_total", "Kafka device.anomaly 处理成功总数"
+        )
+        _anomaly_handled_counter.inc()
         logger.info(
             "kafka.device_anomaly.handled",
             workflow_id=workflow_id,

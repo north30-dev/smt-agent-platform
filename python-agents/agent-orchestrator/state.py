@@ -18,6 +18,9 @@ class OrchestratorState(TypedDict):
     device_id: int
     symptom: str
 
+    # 工作流 ID（由 _run_device_fault_workflow 生成，供 execution_node 回传）
+    workflow_id: str
+
     # 各子 Agent 调用结果（成功为 dict，失败为 None 或 {"status": "skipped", ...}）
     diagnosis: dict | None
     quality_assessment: dict | None

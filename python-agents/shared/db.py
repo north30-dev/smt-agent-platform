@@ -298,18 +298,18 @@ async def list_instructions(
     page: int = 1,
     size: int = 20,
     status: str | None = None,
-    type: str | None = None,
+    instruction_type: str | None = None,
 ) -> dict:
     """分页查询指令记录，按 created_at DESC 排序。
 
     遵循 alert_store.list_alerts 分页模式：返回 {records, total, page, size}。
-    可选 status / type 过滤；page 从 1 开始，size<1 归一为 1。
+    可选 status / instruction_type 过滤；page 从 1 开始，size<1 归一为 1。
 
     Args:
         page: 页码，从 1 开始。
         size: 每页条数。
         status: 可选状态过滤（如 PENDING / COMPLETED）。
-        type: 可选类型过滤（如 REPAIR / PARAM_CHANGE）。
+        instruction_type: 可选类型过滤（如 REPAIR / PARAM_CHANGE）。
 
     Returns:
         {records: [...], total: int, page: int, size: int}
@@ -327,8 +327,8 @@ async def list_instructions(
         if status is not None:
             params.append(status)
             conditions.append(f"status = ${len(params)}")
-        if type is not None:
-            params.append(type)
+        if instruction_type is not None:
+            params.append(instruction_type)
             conditions.append(f"type = ${len(params)}")
         where_clause = (
             " WHERE " + " AND ".join(conditions) if conditions else ""
@@ -570,7 +570,7 @@ async def create_approval(
 
     Args:
         instruction_id: 关联指令 ID。
-        decision: 审批决定 approve / reject。
+        decision: 审批决定 APPROVE / REJECT。
         approver: 审批人，可空。
         comment: 审批意见，可空。
 
@@ -590,6 +590,51 @@ async def create_approval(
             comment,
         )
     return _approval_row_to_dict(row)
+
+
+async def update_instruction_status_and_create_approval(
+    instruction_id: str,
+    new_status: str,
+    decision: str,
+    approver: str | None,
+    comment: str | None,
+) -> dict | None:
+    """事务内更新指令状态 + 写入审批记录，保证原子性。
+
+    Args:
+        instruction_id: 指令 ID。
+        new_status: 目标状态（如 APPROVED / REJECTED）。
+        decision: 审批决定。
+        approver: 审批人。
+        comment: 审批意见。
+
+    Returns:
+        更新后的指令记录 dict，或 None（指令不存在）。
+    """
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                "UPDATE execution_instructions "
+                "SET status = $1, updated_at = NOW() "
+                "WHERE instruction_id = $2 "
+                "RETURNING id, instruction_id, source_workflow_id, type, payload, "
+                "status, priority, auto_execute, created_at, updated_at",
+                new_status,
+                instruction_id,
+            )
+            if row is None:
+                return None
+            await conn.execute(
+                "INSERT INTO approvals "
+                "(instruction_id, decision, approver, comment) "
+                "VALUES ($1, $2, $3, $4)",
+                instruction_id,
+                decision,
+                approver,
+                comment,
+            )
+    return _instruction_row_to_dict(row)
 
 
 async def get_approvals_by_instruction(instruction_id: str) -> list[dict]:
@@ -615,13 +660,13 @@ async def get_approvals_by_instruction(instruction_id: str) -> list[dict]:
 # ===========================================================================
 # Phase 4 行转 dict 辅助函数
 #
-# 遵循 alert_store._row_to_dict / order_store._fmt_ts 模式：
+# 遵循 alert_store._row_to_dict / order_store.fmt_ts 模式：
 # - JSONB 字段兼容 str（asyncpg 默认返回 str）/ dict / list；
 # - timestamp 字段统一为带时区的 ISO 字符串。
 # ===========================================================================
 
 
-def _parse_jsonb(raw) -> dict | list | None:
+def parse_jsonb(raw) -> dict | list | None:
     """JSONB 字段反序列化：兼容 str / dict / list / None。"""
     if raw is None:
         return None
@@ -632,7 +677,7 @@ def _parse_jsonb(raw) -> dict | list | None:
     return None
 
 
-def _fmt_ts(ts) -> str:
+def fmt_ts(ts) -> str:
     """timestamp 格式化为带时区的 ISO 字符串。
 
     无时区信息时按 UTC 处理，与 alert_store._row_to_dict 对齐。
@@ -653,12 +698,12 @@ def _instruction_row_to_dict(row: asyncpg.Record) -> dict:
         "instruction_id": row["instruction_id"],
         "source_workflow_id": row["source_workflow_id"],
         "type": row["type"],
-        "payload": _parse_jsonb(row["payload"]),
+        "payload": parse_jsonb(row["payload"]),
         "status": row["status"],
         "priority": row["priority"],
         "auto_execute": bool(row["auto_execute"]),
-        "created_at": _fmt_ts(row["created_at"]),
-        "updated_at": _fmt_ts(row["updated_at"]),
+        "created_at": fmt_ts(row["created_at"]),
+        "updated_at": fmt_ts(row["updated_at"]),
     }
 
 
@@ -671,9 +716,9 @@ def _exception_row_to_dict(row: asyncpg.Record) -> dict:
         "instruction_id": row["instruction_id"],
         "description": row["description"],
         "status": row["status"],
-        "analysis": _parse_jsonb(row["analysis"]),
-        "created_at": _fmt_ts(row["created_at"]),
-        "updated_at": _fmt_ts(row["updated_at"]),
+        "analysis": parse_jsonb(row["analysis"]),
+        "created_at": fmt_ts(row["created_at"]),
+        "updated_at": fmt_ts(row["updated_at"]),
     }
 
 
@@ -685,5 +730,5 @@ def _approval_row_to_dict(row: asyncpg.Record) -> dict:
         "decision": row["decision"],
         "approver": row["approver"],
         "comment": row["comment"],
-        "created_at": _fmt_ts(row["created_at"]),
+        "created_at": fmt_ts(row["created_at"]),
     }

@@ -151,6 +151,15 @@ cd "$PROJECT_ROOT"
 info "等待 smt-device-service 就绪..."
 wait_for_health "http://$HOST:$DEVICE_SERVICE_PORT/actuator/health" 60 "smt-device-service" "UP" || exit 1
 
+cd "$PROJECT_ROOT/java-backend"
+info "启动 smt-gateway ($GATEWAY_PORT)..."
+mvn -pl smt-gateway spring-boot:run > "$LOG_DIR/smt-gateway.log" 2>&1 &
+echo $! > "$LOG_DIR/smt-gateway.pid"
+cd "$PROJECT_ROOT"
+
+info "等待 smt-gateway 就绪..."
+wait_for_health "http://$HOST:$GATEWAY_PORT/actuator/health" 60 "smt-gateway" "UP" || exit 1
+
 # ========== 5. 启动 Python 智能体 ==========
 info "启动 Python 智能体..."
 
@@ -217,6 +226,7 @@ echo "    Zookeeper    : $HOST:$ZOOKEEPER_PORT"
 echo "    Kafka        : $HOST:$KAFKA_PORT"
 echo "  应用服务："
 echo "    device-service  : http://$HOST:$DEVICE_SERVICE_PORT"
+echo "    gateway         : http://$HOST:$GATEWAY_PORT"
 echo "    scheduler       : http://$HOST:$SCHEDULER_PORT"
 echo "    maintenance     : http://$HOST:$MAINTENANCE_PORT"
 echo "    quality         : http://$HOST:$QUALITY_PORT"

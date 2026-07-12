@@ -6,6 +6,7 @@
 
 from datetime import datetime, timezone
 
+from shared.db import fmt_ts
 from shared.db import get_pg_pool
 
 
@@ -32,9 +33,7 @@ async def list_doc_meta() -> dict[str, dict]:
     return {
         r["doc_id"]: {
             "doc_name": r["doc_name"],
-            "create_time": r["create_time"].strftime("%Y-%m-%dT%H:%M:%SZ")
-            if r["create_time"]
-            else "",
+            "create_time": fmt_ts(r["create_time"]),
         }
         for r in rows
     }

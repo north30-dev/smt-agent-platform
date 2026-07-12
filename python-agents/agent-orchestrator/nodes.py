@@ -10,6 +10,7 @@
 import json
 import time
 from datetime import date, timedelta
+from uuid import uuid4
 
 from shared import llm_client
 from shared.llm_client import LLMClientError
@@ -116,7 +117,7 @@ async def execution_node(state: OrchestratorState) -> dict:
     if diag_empty and sched_empty:
         return {"instructions": []}
 
-    source_workflow_id = state.get("workflow_id", f"wf-temp-{id(state)}")
+    source_workflow_id = state.get("workflow_id", f"wf-orphan-{uuid4().hex[:12]}")
 
     try:
         instructions = await agent_clients.call_execution(

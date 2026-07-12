@@ -118,3 +118,35 @@ def register_health_endpoint(
             version=_VERSION,
             checks=check_results,
         )
+
+
+def register_metrics_endpoint(app: FastAPI) -> None:
+    """注册 /metrics Prometheus 指标端点。
+
+    使用 prometheus-fastapi-instrumentator 自动采集请求延迟、
+    请求计数、在途请求数等指标。
+    """
+    from prometheus_fastapi_instrumentator import Instrumentator
+
+    instrumentator = Instrumentator()
+    instrumentator.instrument(app)
+    instrumentator.expose(app, endpoint="/metrics", include_in_schema=True)
+
+
+# ---------------------------------------------------------------------------
+# 自定义业务指标
+# ---------------------------------------------------------------------------
+
+_counters: dict[str, Any] = {}
+
+
+def get_counter(name: str, description: str = "") -> Any:
+    """获取或创建 Prometheus Counter 指标。
+
+    首次调用时创建，后续调用返回同一实例。
+    """
+    from prometheus_client import Counter
+
+    if name not in _counters:
+        _counters[name] = Counter(name, description)
+    return _counters[name]

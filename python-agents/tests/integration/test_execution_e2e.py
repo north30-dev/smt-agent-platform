@@ -60,7 +60,7 @@ def test_instruction_lifecycle_e2e():
     # 审批（approve）
     approve_resp = httpx.post(
         f"{EXECUTION_BASE}/v1/execution/instructions/{instr_id}/approve",
-        json={"decision": "approve", "approver": "e2e-test"},
+        json={"decision": "APPROVE", "approver": "e2e-test"},
         timeout=10.0,
     )
     assert approve_resp.status_code == 200

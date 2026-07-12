@@ -108,3 +108,20 @@ async def verify_exception(exception_id: str, req: VerifyRequest) -> dict:
     if result is None:
         raise ValueError(f"异常不存在: {exception_id}")
     return result
+
+
+async def handle_exception(exception_id: str) -> dict:
+    """推进异常状态 ANALYZED → HANDLED。
+
+    Raises:
+        ValueError: 异常不存在或不在 ANALYZED 状态。
+    """
+    exc = await db.get_exception(exception_id)
+    if exc is None:
+        raise ValueError(f"异常不存在: {exception_id}")
+    if exc["status"] != "ANALYZED":
+        raise ValueError(f"异常不在 ANALYZED 状态: {exc['status']}")
+    result = await db.update_exception_status(exception_id, "HANDLED")
+    if result is None:
+        raise ValueError(f"异常不存在: {exception_id}")
+    return result

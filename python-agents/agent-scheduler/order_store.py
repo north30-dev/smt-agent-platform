@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 import asyncpg
 
 from shared.db import close_pool as _shared_close_pool
+from shared.db import fmt_ts
 from shared.db import get_pg_pool
 
 
@@ -216,8 +217,8 @@ def _row_to_dict(row: asyncpg.Record) -> dict:
         "material_ready": bool(row["material_ready"]),
         "status": row["status"],
         "source": row["source"],
-        "created_at": _fmt_ts(row["created_at"]),
-        "updated_at": _fmt_ts(row["updated_at"]),
+        "created_at": fmt_ts(row["created_at"]),
+        "updated_at": fmt_ts(row["updated_at"]),
     }
 
 
@@ -236,12 +237,6 @@ def _plan_row_to_dict(row: asyncpg.Record) -> dict:
         "allocations": allocations,
         "description": row["description"] or "",
         "status": row["status"],
-        "created_at": _fmt_ts(row["created_at"]),
+        "created_at": fmt_ts(row["created_at"]),
     }
 
-
-def _fmt_ts(ts) -> str:
-    """将 timestamp 格式化为 ISO 字符串。"""
-    if ts is None:
-        return ""
-    return ts.strftime("%Y-%m-%dT%H:%M:%SZ")

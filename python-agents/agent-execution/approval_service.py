@@ -28,15 +28,15 @@ async def approve(instruction_id: str, req: ApprovalRequest) -> dict:
         raise ValueError("指令不在待审批状态")
 
     new_status = (
-        "APPROVED" if req.decision == ApprovalDecision.approve else "REJECTED"
+        "APPROVED" if req.decision == ApprovalDecision.APPROVE else "REJECTED"
     )
-    result = await db.update_instruction_status(instruction_id, new_status)
-    if result is None:
-        raise ValueError(f"指令不存在: {instruction_id}")
-    await db.create_approval(
+    result = await db.update_instruction_status_and_create_approval(
         instruction_id=instruction_id,
+        new_status=new_status,
         decision=req.decision.value,
         approver=req.approver,
         comment=req.comment,
     )
+    if result is None:
+        raise ValueError(f"指令不存在: {instruction_id}")
     return result

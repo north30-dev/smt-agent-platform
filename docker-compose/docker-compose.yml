@@ -89,7 +89,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CREATE_TOPICS: "smt-device-telemetry:1:1,smt-alarm-events:1:1"
+      KAFKA_CREATE_TOPICS: "smt-device-telemetry:1:1,smt-alarm-events:1:1,device.anomaly:1:1,execution.instruction:1:1,exception.record:1:1"
       TZ: Asia/Shanghai
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || exit 1"]

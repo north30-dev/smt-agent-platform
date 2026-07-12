@@ -266,7 +266,7 @@ async def test_get_instruction_returns_none(mock_db):
 
 
 async def test_list_instructions_passes_filters(mock_db):
-    """list 应透传 page/size/status/type 给 db.list_instructions。"""
+    """list 应透传 page/size/status/instruction_type 给 db.list_instructions。"""
     mock_db["list_instructions"].return_value = {
         "records": [],
         "total": 0,
@@ -274,7 +274,7 @@ async def test_list_instructions_passes_filters(mock_db):
         "size": 20,
     }
     result = await instruction_service.list_instructions(
-        page=2, size=10, status="PENDING", type="REPAIR"
+        page=2, size=10, status="PENDING", instruction_type="REPAIR"
     )
     mock_db["list_instructions"].assert_awaited_once_with(
         2, 10, "PENDING", "REPAIR"

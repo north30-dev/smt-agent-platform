@@ -23,7 +23,7 @@ from shared.config import settings
 from shared.db import close_pool, init_execution_tables
 from shared.llm_client import LLMClientError
 from shared.models import ErrorResponse
-from shared.observability import get_logger, register_health_endpoint, setup_logging
+from shared.observability import get_logger, register_health_endpoint, register_metrics_endpoint, setup_logging
 
 from . import exception_service, instruction_service, approval_service, kafka_consumer
 from .models import (
@@ -87,6 +87,7 @@ app = FastAPI(
 setup_logging(settings.log_level)
 logger = get_logger("agent-execution")
 register_health_endpoint(app, "agent-execution")
+register_metrics_endpoint(app)
 
 
 # ---------------------------------------------------------------------------
@@ -112,11 +113,11 @@ async def list_instructions(
     page: int = Query(1, ge=1, description="页码，从 1 开始"),
     size: int = Query(20, ge=1, le=200, description="每页条数，1-200"),
     status: str | None = Query(None, description="状态过滤"),
-    type: str | None = Query(None, description="类型过滤"),
+    instruction_type: str | None = Query(None, description="类型过滤"),
 ):
     """分页查询执行指令。"""
     result = await instruction_service.list_instructions(
-        page, size, status, type
+        page, size, status, instruction_type
     )
     return InstructionListResponse(
         records=[InstructionResponse(**r) for r in result["records"]],
@@ -206,6 +207,26 @@ async def verify_exception(exception_id: str, req: VerifyRequest):
         status=result["status"],
         note=req.note,
     )
+
+
+@app.post(
+    "/v1/execution/exceptions/{exception_id}/analyze",
+    response_model=ExceptionResponse,
+)
+async def analyze_exception(exception_id: str):
+    """对异常进行 LLM 根因分析，状态推进为 ANALYZED。"""
+    result = await exception_service.analyze_exception(exception_id)
+    return ExceptionResponse(**result)
+
+
+@app.post(
+    "/v1/execution/exceptions/{exception_id}/handle",
+    response_model=ExceptionResponse,
+)
+async def handle_exception(exception_id: str):
+    """推进异常状态 ANALYZED → HANDLED。"""
+    result = await exception_service.handle_exception(exception_id)
+    return ExceptionResponse(**result)
 
 
 # ---------------------------------------------------------------------------

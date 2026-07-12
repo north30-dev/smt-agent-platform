@@ -5,10 +5,9 @@
 错误不在本模块捕获，统一交由 main.py 异常处理器兜底。
 """
 
-from datetime import datetime, timezone
-
 from shared.config import settings
 from shared.db import close_pool as _shared_close_pool
+from shared.db import fmt_ts
 from shared.db import get_pg_pool
 
 
@@ -92,17 +91,6 @@ async def list_alerts(page: int = 1, size: int | None = None) -> dict:
 
 def _row_to_dict(row) -> dict:
     """asyncpg.Record 转 dict，alert_time 格式化为 ISO 字符串。"""
-    alert_time = row["alert_time"]
-    if alert_time is None:
-        alert_time_str = ""
-    elif isinstance(alert_time, datetime):
-        # 统一输出带时区的 ISO 字符串
-        if alert_time.tzinfo is None:
-            alert_time = alert_time.replace(tzinfo=timezone.utc)
-        alert_time_str = alert_time.isoformat()
-    else:
-        alert_time_str = str(alert_time)
-
     return {
         "id": int(row["id"]),
         "device_id": int(row["device_id"]),
@@ -110,7 +98,7 @@ def _row_to_dict(row) -> dict:
         "threshold": float(row["threshold"]),
         "status": str(row["status"]),
         "datapoint_code": row["datapoint_code"],
-        "alert_time": alert_time_str,
+        "alert_time": fmt_ts(row["alert_time"]),
     }
 
 

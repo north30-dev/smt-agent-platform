@@ -32,6 +32,20 @@ _producer_started: bool = False
 _producer_failed: bool = False
 
 
+def _build_kafka_config() -> dict:
+    """构建 Kafka 客户端公共配置（安全协议 + SASL 认证）。"""
+    config: dict = {
+        "bootstrap_servers": settings.kafka_bootstrap_servers,
+    }
+    if settings.kafka_security_protocol != "PLAINTEXT":
+        config["security_protocol"] = settings.kafka_security_protocol
+        if settings.kafka_sasl_mechanism:
+            config["sasl_mechanism"] = settings.kafka_sasl_mechanism
+            config["sasl_plain_username"] = settings.kafka_sasl_username
+            config["sasl_plain_password"] = settings.kafka_sasl_password
+    return config
+
+
 def _get_producer() -> AIOKafkaProducer | None:
     """获取共享 AIOKafkaProducer 实例（懒初始化，仅构造，不启动）。
 
@@ -43,9 +57,7 @@ def _get_producer() -> AIOKafkaProducer | None:
     if not settings.kafka_enabled:
         return None
     if _producer_instance is None:
-        _producer_instance = AIOKafkaProducer(
-            bootstrap_servers=settings.kafka_bootstrap_servers,
-        )
+        _producer_instance = AIOKafkaProducer(**_build_kafka_config())
     return _producer_instance
 
 
@@ -130,7 +142,7 @@ async def start_consumer(
     consumer = AIOKafkaConsumer(
         topic,
         group_id=group_id,
-        bootstrap_servers=settings.kafka_bootstrap_servers,
+        **_build_kafka_config(),
     )
 
     try:
