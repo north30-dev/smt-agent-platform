@@ -95,7 +95,7 @@ async def list_orders(
         return JSONResponse(
             status_code=400,
             content=ErrorResponse(
-                error="invalid_param",
+                error="INVALID_ORDER_STATUS",
                 message=(
                     f"非法 status 值: {status}，"
                     f"合法值为 {sorted(VALID_ORDER_STATUSES)}"
@@ -124,7 +124,7 @@ async def get_current_plan():
         return JSONResponse(
             status_code=404,
             content=ErrorResponse(
-                error="plan_not_found",
+                error="PLAN_NOT_FOUND",
                 message="当前无 ACTIVE 排产计划",
             ).model_dump(),
         )
@@ -152,7 +152,7 @@ async def device_service_unavailable_handler(
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="device_service_unavailable", message=str(exc)
+            error="DEVICE_SERVICE_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -164,7 +164,7 @@ async def llm_error_handler(_request, exc: LLMClientError):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="llm_unavailable", message=str(exc)
+            error="LLM_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -176,7 +176,7 @@ async def vector_store_error_handler(_request, exc: VectorStoreError):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="vector_store_unavailable", message=str(exc)
+            error="VECTOR_STORE_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -188,7 +188,7 @@ async def value_error_handler(_request, exc: ValueError):
     return JSONResponse(
         status_code=400,
         content=ErrorResponse(
-            error="invalid_param", message=str(exc)
+            error="INVALID_PARAM", message=str(exc)
         ).model_dump(),
     )
 
@@ -200,7 +200,7 @@ async def internal_error_handler(_request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
-            error="internal_error", message="内部错误"
+            error="UNEXPECTED_ERROR", message="内部错误"
         ).model_dump(),
     )
 

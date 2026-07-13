@@ -201,7 +201,7 @@ def test_generate_plan_device_unavailable_returns_503(monkeypatch):
 
     assert response.status_code == 503
     data = response.json()
-    assert data["error"] == "device_service_unavailable"
+    assert data["error"] == "DEVICE_SERVICE_UNAVAILABLE"
 
 
 def test_generate_plan_llm_error_returns_503(monkeypatch):
@@ -214,7 +214,7 @@ def test_generate_plan_llm_error_returns_503(monkeypatch):
     response = client.post("/v1/scheduler/plan/generate", json={})
 
     assert response.status_code == 503
-    assert response.json()["error"] == "llm_unavailable"
+    assert response.json()["error"] == "LLM_UNAVAILABLE"
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +256,7 @@ def test_get_current_plan_returns_404_when_none(monkeypatch):
 
     assert response.status_code == 404
     data = response.json()
-    assert data["error"] == "plan_not_found"
+    assert data["error"] == "PLAN_NOT_FOUND"
 
 
 # ---------------------------------------------------------------------------

@@ -129,7 +129,7 @@ def test_monitor_device_unavailable_returns_503(monkeypatch):
 
     assert response.status_code == 503
     data = response.json()
-    assert data["error"] == "device_service_unavailable"
+    assert data["error"] == "DEVICE_SERVICE_UNAVAILABLE"
     assert "connection refused" in data["message"]
 
 
@@ -199,7 +199,7 @@ def test_root_cause_llm_error_returns_503(monkeypatch):
     )
 
     assert response.status_code == 503
-    assert response.json()["error"] == "llm_unavailable"
+    assert response.json()["error"] == "LLM_UNAVAILABLE"
 
 
 def test_root_cause_vector_store_error_returns_503(monkeypatch):
@@ -215,7 +215,7 @@ def test_root_cause_vector_store_error_returns_503(monkeypatch):
     )
 
     assert response.status_code == 503
-    assert response.json()["error"] == "vector_store_unavailable"
+    assert response.json()["error"] == "VECTOR_STORE_UNAVAILABLE"
 
 
 def test_cases_endpoint(monkeypatch):

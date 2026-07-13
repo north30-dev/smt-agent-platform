@@ -232,7 +232,7 @@ paths:
                 upstream:
                   summary: Java 服务不可达
                   value:
-                    error: UPSTREAM_UNAVAILABLE
+                    error: DEVICE_SERVICE_UNAVAILABLE
                     message: 设备服务暂不可用
   /api/agent/maintenance/diagnose:
     post:
@@ -302,7 +302,7 @@ paths:
                 upstream:
                   summary: Java 服务不可达
                   value:
-                    error: UPSTREAM_UNAVAILABLE
+                    error: DEVICE_SERVICE_UNAVAILABLE
                     message: 设备服务暂不可用
   /api/agent/maintenance/predict/{device_id}:
     get:
@@ -361,7 +361,7 @@ paths:
                 upstream:
                   summary: Java 服务不可达
                   value:
-                    error: UPSTREAM_UNAVAILABLE
+                    error: DEVICE_SERVICE_UNAVAILABLE
                     message: 设备服务暂不可用
   /api/agent/maintenance/cases:
     post:
@@ -409,7 +409,7 @@ paths:
                 missingField:
                   summary: 必填字段缺失
                   value:
-                    error: INVALID_CASE
+                    error: MISSING_CASE_REQUIRED_FIELDS
                     message: 设备类型、故障现象、根因、解决方案均为必填
   /api/agent/quality/monitor/{device_id}:
     get:
@@ -454,7 +454,7 @@ paths:
                 upstream:
                   summary: Java 服务不可达
                   value:
-                    error: UPSTREAM_UNAVAILABLE
+                    error: DEVICE_SERVICE_UNAVAILABLE
                     message: 设备服务暂不可用
   /api/agent/quality/root_cause:
     post:
@@ -526,7 +526,7 @@ paths:
                 upstream:
                   summary: 上游服务不可达
                   value:
-                    error: UPSTREAM_UNAVAILABLE
+                    error: LLM_UNAVAILABLE
                     message: 上游服务暂不可用
   /api/agent/quality/cases:
     post:
@@ -574,7 +574,7 @@ paths:
                 missingField:
                   summary: 必填字段缺失
                   value:
-                    error: INVALID_CASE
+                    error: MISSING_CASE_REQUIRED_FIELDS
                     message: 缺陷类型、描述、根因、纠正措施均为必填
   /api/agent/quality/alerts:
     get:
@@ -693,7 +693,7 @@ paths:
                 missingField:
                   summary: 必填字段缺失
                   value:
-                    error: INVALID_ORDER
+                    error: MISSING_ORDER_REQUIRED_FIELDS
                     message: 订单号、产品型号、数量、交付日期均为必填
     get:
       tags:
@@ -803,7 +803,7 @@ paths:
                 upstream:
                   summary: 上游服务不可达
                   value:
-                    error: UPSTREAM_UNAVAILABLE
+                    error: DEVICE_SERVICE_UNAVAILABLE
                     message: 上游服务暂不可用
   /api/agent/scheduler/plan/current:
     get:
@@ -902,7 +902,7 @@ paths:
                 missingField:
                   summary: 必填字段缺失
                   value:
-                    error: INVALID_URGENT_ORDER
+                    error: MISSING_URGENT_ORDER_REQUIRED_FIELDS
                     message: 订单号、产品型号、数量、交付日期均为必填
   /api/agent/orchestrator/device_fault:
     post:
@@ -1131,7 +1131,7 @@ paths:
                 missingField:
                   summary: 必填字段缺失
                   value:
-                    error: INVALID_INSTRUCTION
+                    error: MISSING_INSTRUCTION_REQUIRED_FIELDS
                     message: 自动生成模式需 source_workflow_id，手动模式需 type/payload/priority
     get:
       tags:
@@ -1453,7 +1453,7 @@ paths:
                 missingField:
                   summary: 必填字段缺失
                   value:
-                    error: INVALID_EXCEPTION
+                    error: MISSING_EXCEPTION_REQUIRED_FIELDS
                     message: 异常来源与描述均为必填
     get:
       tags:
@@ -1784,6 +1784,43 @@ components:
       schema:
         type: string
         example: exc-2026-0001
+  responses:
+    DeviceServiceUnavailable:
+      description: 设备服务（smt-device-service）不可达
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            deviceServiceUnavailable:
+              summary: 设备服务不可达
+              value:
+                error: DEVICE_SERVICE_UNAVAILABLE
+                message: 设备服务暂不可用
+    LLMUnavailable:
+      description: 大模型服务不可达
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            llmUnavailable:
+              summary: 大模型服务不可达
+              value:
+                error: LLM_UNAVAILABLE
+                message: 大模型服务暂不可用
+    VectorStoreUnavailable:
+      description: 向量库服务不可达
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            vectorStoreUnavailable:
+              summary: 向量库服务不可达
+              value:
+                error: VECTOR_STORE_UNAVAILABLE
+                message: 向量库服务暂不可用
   schemas:
     ErrorResponse:
       type: object

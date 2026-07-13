@@ -138,7 +138,7 @@ async def get_instruction(instruction_id: str):
         return JSONResponse(
             status_code=404,
             content=ErrorResponse(
-                error="instruction_not_found",
+                error="INSTRUCTION_NOT_FOUND",
                 message=f"指令不存在: {instruction_id}",
             ).model_dump(),
         )
@@ -241,7 +241,7 @@ async def llm_error_handler(_request, exc: LLMClientError):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="llm_unavailable", message=str(exc)
+            error="LLM_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -253,7 +253,7 @@ async def value_error_handler(_request, exc: ValueError):
     return JSONResponse(
         status_code=400,
         content=ErrorResponse(
-            error="invalid_param", message=str(exc)
+            error="INVALID_PARAM", message=str(exc)
         ).model_dump(),
     )
 
@@ -265,7 +265,7 @@ async def internal_error_handler(_request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
-            error="internal_error", message="内部错误"
+            error="UNEXPECTED_ERROR", message="内部错误"
         ).model_dump(),
     )
 

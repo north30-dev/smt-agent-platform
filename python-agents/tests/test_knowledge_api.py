@@ -121,7 +121,7 @@ def test_ask_llm_unavailable_returns_503(monkeypatch):
 
     assert response.status_code == 503
     data = response.json()
-    assert data["error"] == "llm_unavailable"
+    assert data["error"] == "LLM_UNAVAILABLE"
     assert "LLM timeout" in data["message"]
 
 
@@ -136,7 +136,7 @@ def test_ask_vector_store_error_returns_503(monkeypatch):
 
     assert response.status_code == 503
     data = response.json()
-    assert data["error"] == "vector_store_unavailable"
+    assert data["error"] == "VECTOR_STORE_UNAVAILABLE"
     assert "Milvus down" in data["message"]
 
 
@@ -152,5 +152,5 @@ def test_upload_empty_file_returns_400():
 
     assert response.status_code == 400
     data = response.json()
-    assert data["error"] == "unsupported_file_type"
+    assert data["error"] == "INVALID_FILE"
     assert data["message"] == "上传文件不能为空"

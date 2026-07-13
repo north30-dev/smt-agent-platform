@@ -61,14 +61,14 @@ async def upload(file: UploadFile = File(...)):
         return JSONResponse(
             status_code=400,
             content=ErrorResponse(
-                error="unsupported_file_type", message="上传文件不能为空"
+                error="INVALID_FILE", message="上传文件不能为空"
             ).model_dump(),
         )
     if len(content) > MAX_UPLOAD_BYTES:
         return JSONResponse(
             status_code=413,
             content=ErrorResponse(
-                error="file_too_large", message="文件大小超过限制（最大 50MB）"
+                error="FILE_TOO_LARGE", message="文件大小超过限制（最大 50MB）"
             ).model_dump(),
         )
     filename = file.filename or "unknown"
@@ -112,7 +112,7 @@ async def value_error_handler(_request, exc: ValueError):
     return JSONResponse(
         status_code=400,
         content=ErrorResponse(
-            error="unsupported_file_type", message=str(exc)
+            error="INVALID_FILE", message=str(exc)
         ).model_dump(),
     )
 
@@ -124,7 +124,7 @@ async def llm_error_handler(_request, exc: LLMClientError):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="llm_unavailable", message=str(exc)
+            error="LLM_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -136,7 +136,7 @@ async def vector_store_error_handler(_request, exc: VectorStoreError):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="vector_store_unavailable", message=str(exc)
+            error="VECTOR_STORE_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -148,7 +148,7 @@ async def internal_error_handler(_request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
-            error="internal_error", message="内部错误"
+            error="UNEXPECTED_ERROR", message="内部错误"
         ).model_dump(),
     )
 

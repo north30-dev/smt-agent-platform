@@ -193,7 +193,7 @@ async def get_workflow(workflow_id: str):
         return JSONResponse(
             status_code=404,
             content=ErrorResponse(
-                error="workflow_not_found",
+                error="WORKFLOW_NOT_FOUND",
                 message=f"工作流不存在: {workflow_id}",
             ).model_dump(),
         )
@@ -216,7 +216,7 @@ async def agent_unavailable_handler(_request, exc: AgentUnavailable):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="agent_unavailable", message=str(exc)
+            error="AGENT_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -228,7 +228,7 @@ async def llm_error_handler(_request, exc: LLMClientError):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="llm_unavailable", message=str(exc)
+            error="LLM_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -240,7 +240,7 @@ async def value_error_handler(_request, exc: ValueError):
     return JSONResponse(
         status_code=400,
         content=ErrorResponse(
-            error="invalid_param", message=str(exc)
+            error="INVALID_PARAM", message=str(exc)
         ).model_dump(),
     )
 
@@ -252,7 +252,7 @@ async def internal_error_handler(_request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
-            error="internal_error", message="内部错误"
+            error="UNEXPECTED_ERROR", message="内部错误"
         ).model_dump(),
     )
 

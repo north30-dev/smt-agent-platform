@@ -53,7 +53,7 @@ def test_health_device_unavailable(monkeypatch):
 
     assert response.status_code == 503
     data = response.json()
-    assert data["error"] == "device_service_unavailable"
+    assert data["error"] == "DEVICE_SERVICE_UNAVAILABLE"
     assert "connection refused" in data["message"]
 
 
@@ -195,7 +195,7 @@ def test_health_score_missing_returns_503(monkeypatch):
 
     assert response.status_code == 503
     data = response.json()
-    assert data["error"] == "device_service_unavailable"
+    assert data["error"] == "DEVICE_SERVICE_UNAVAILABLE"
 
 
 def test_diagnose_empty_symptom_returns_422():
@@ -226,4 +226,4 @@ def test_diagnose_llm_error_returns_503(monkeypatch):
 
     assert response.status_code == 503
     data = response.json()
-    assert data["error"] == "llm_unavailable"
+    assert data["error"] == "LLM_UNAVAILABLE"

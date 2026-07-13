@@ -258,7 +258,7 @@ async def test_get_instruction_not_found_returns_404(client, monkeypatch):
     resp = await client.get("/v1/execution/instructions/instr-missing")
     assert resp.status_code == 404
     data = resp.json()
-    assert data["error"] == "instruction_not_found"
+    assert data["error"] == "INSTRUCTION_NOT_FOUND"
     assert "instr-missing" in data["message"]
 
 
@@ -304,7 +304,7 @@ async def test_progress_invalid_transition_returns_400(client, monkeypatch):
     )
     assert resp.status_code == 400
     data = resp.json()
-    assert data["error"] == "invalid_param"
+    assert data["error"] == "INVALID_PARAM"
     assert "非法状态跳转" in data["message"]
 
 
@@ -320,7 +320,7 @@ async def test_progress_not_found_returns_400(client, monkeypatch):
         json={"status": "EXECUTING"},
     )
     assert resp.status_code == 400
-    assert resp.json()["error"] == "invalid_param"
+    assert resp.json()["error"] == "INVALID_PARAM"
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +364,7 @@ async def test_approve_route_not_pending_returns_400(client, monkeypatch):
         json={"decision": "APPROVE"},
     )
     assert resp.status_code == 400
-    assert resp.json()["error"] == "invalid_param"
+    assert resp.json()["error"] == "INVALID_PARAM"
 
 
 # ---------------------------------------------------------------------------
@@ -474,4 +474,4 @@ async def test_create_exception_internal_error_returns_500(client, monkeypatch):
         json={"source": "manual", "description": "x"},
     )
     assert resp.status_code == 500
-    assert resp.json()["error"] == "internal_error"
+    assert resp.json()["error"] == "UNEXPECTED_ERROR"

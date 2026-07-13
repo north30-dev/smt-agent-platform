@@ -112,6 +112,34 @@ def test_error_response_schema_consistent():
             assert set(schema.get("required", [])) == {"error", "message"}
 
 
+def test_contract_error_codes_are_upper_snake_case():
+    """契约中所有 error 示例值必须为 UPPER_SNAKE_CASE 格式。"""
+    import re
+    upper_snake = re.compile(r"^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$")
+    errors_found = []
+
+    for path, methods in contract["paths"].items():
+        for method, detail in methods.items():
+            if not isinstance(detail, dict):
+                continue
+            for status_code, response in detail.get("responses", {}).items():
+                if not isinstance(response, dict):
+                    continue
+                content = response.get("content", {})
+                for media_type, media in content.items():
+                    examples = media.get("examples", {})
+                    for ex_name, ex in examples.items():
+                        value = ex.get("value", {})
+                        if isinstance(value, dict) and "error" in value:
+                            error_code = value["error"]
+                            if not upper_snake.match(error_code):
+                                errors_found.append(
+                                    f"{method.upper()} {path} [{status_code}]: {error_code}"
+                                )
+
+    assert not errors_found, f"以下错误码不符合 UPPER_SNAKE_CASE 格式:\n" + "\n".join(errors_found)
+
+
 def _setup_knowledge_mocks(monkeypatch):
     """mock knowledge app 的 rag_chain 依赖。"""
     monkeypatch.setattr(

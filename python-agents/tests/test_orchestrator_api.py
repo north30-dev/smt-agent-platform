@@ -297,7 +297,7 @@ def test_get_workflow_unknown_returns_404():
 
     assert response.status_code == 404
     data = response.json()
-    assert data["error"] == "workflow_not_found"
+    assert data["error"] == "WORKFLOW_NOT_FOUND"
     assert "wf-unknown" in data["message"]
 
 
@@ -319,7 +319,7 @@ def test_device_fault_internal_error_returns_500(monkeypatch):
 
     assert response.status_code == 500
     data = response.json()
-    assert data["error"] == "internal_error"
+    assert data["error"] == "UNEXPECTED_ERROR"
 
 
 def test_device_fault_workflow_id_uniqueness(monkeypatch):

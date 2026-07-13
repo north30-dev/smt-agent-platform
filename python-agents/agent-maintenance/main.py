@@ -128,7 +128,7 @@ async def device_service_unavailable_handler(_request, exc: DeviceServiceUnavail
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="device_service_unavailable", message=str(exc)
+            error="DEVICE_SERVICE_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -140,7 +140,7 @@ async def llm_error_handler(_request, exc: LLMClientError):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="llm_unavailable", message=str(exc)
+            error="LLM_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -152,7 +152,7 @@ async def vector_store_error_handler(_request, exc: VectorStoreError):
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(
-            error="vector_store_unavailable", message=str(exc)
+            error="VECTOR_STORE_UNAVAILABLE", message=str(exc)
         ).model_dump(),
     )
 
@@ -164,7 +164,7 @@ async def value_error_handler(_request, exc: ValueError):
     return JSONResponse(
         status_code=400,
         content=ErrorResponse(
-            error="invalid_param", message=str(exc)
+            error="INVALID_PARAM", message=str(exc)
         ).model_dump(),
     )
 
@@ -176,7 +176,7 @@ async def internal_error_handler(_request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
-            error="internal_error", message="内部错误"
+            error="UNEXPECTED_ERROR", message="内部错误"
         ).model_dump(),
     )
 
