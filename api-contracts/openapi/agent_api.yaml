@@ -600,7 +600,7 @@ paths:
           schema:
             type: integer
             minimum: 1
-            maximum: 100
+            maximum: 200
             default: 20
             example: 20
       responses:
@@ -1100,25 +1100,27 @@ paths:
                   priority: CRITICAL
       responses:
         '200':
-          description: 创建成功
+          description: 创建成功（自动生成模式可能返回多条指令）
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionInstructionResponse'
+                $ref: '#/components/schemas/ExecutionInstructionCreateResponse'
               examples:
                 success:
-                  summary: 创建成功
+                  summary: 创建成功（自动生成模式，返回指令列表）
                   value:
-                    instruction_id: ins-2026-0001
-                    type: REPAIR
-                    status: PENDING_APPROVAL
-                    priority: CRITICAL
-                    payload:
-                      device_id: 1001
-                      action: 补充导轨润滑油
-                    auto_execute: false
-                    source_workflow_id: wf-2026-0001
-                    created_at: '2026-07-09T08:30:00Z'
+                    instructions:
+                      - instruction_id: ins-2026-0001
+                        type: REPAIR
+                        status: PENDING_APPROVAL
+                        priority: CRITICAL
+                        payload:
+                          device_id: 1001
+                          action: 补充导轨润滑油
+                        auto_execute: false
+                        source_workflow_id: wf-2026-0001
+                        created_at: '2026-07-09T08:30:00Z'
+                        updated_at: '2026-07-09T08:30:00Z'
         '400':
           description: 参数错误（两种模式必填字段均缺失）
           content:
@@ -1154,7 +1156,7 @@ paths:
           schema:
             type: integer
             minimum: 1
-            maximum: 100
+            maximum: 200
             default: 20
             example: 20
         - name: status
@@ -1163,7 +1165,7 @@ paths:
           required: false
           schema:
             $ref: '#/components/schemas/InstructionStatus'
-        - name: type
+        - name: instruction_type
           in: query
           description: 指令类型筛选
           required: false
@@ -1476,7 +1478,7 @@ paths:
           schema:
             type: integer
             minimum: 1
-            maximum: 100
+            maximum: 200
             default: 20
             example: 20
         - name: status
@@ -1552,18 +1554,20 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExceptionResponse'
+                $ref: '#/components/schemas/ExceptionVerifyResponse'
               examples:
                 closed:
                   summary: 验证通过，异常关闭
                   value:
                     exception_id: exc-2026-0001
-                    source: instruction_failed
-                    instruction_id: ins-2026-0001
-                    description: 维修人员反馈导轨润滑油型号不匹配，无法执行
                     status: CLOSED
-                    created_at: '2026-07-09T10:30:00Z'
-                    closed_at: '2026-07-09T11:00:00Z'
+                    note: 已更换正确型号润滑油并复测正常
+                reopened:
+                  summary: 验证不通过，异常重新打开
+                  value:
+                    exception_id: exc-2026-0001
+                    status: OPEN
+                    note: 振动指标仍偏高，需进一步排查
         '404':
           description: 异常不存在
           content:
@@ -1576,8 +1580,79 @@ paths:
                   value:
                     error: EXCEPTION_NOT_FOUND
                     message: 异常 ID 不存在
-        '409':
-          description: 异常状态不允许验证（非 HANDLED）
+  /api/agent/v1/execution/exceptions/{exception_id}/analyze:
+    post:
+      tags:
+        - 执行智能体
+      summary: LLM 根因分析异常
+      description: |
+        对异常记录进行 LLM 根因分析，状态从 OPEN 推进为 ANALYZED。
+        LLM 不可达时降级为手动审查标记，不阻断流程。
+      operationId: analyzeExecutionException
+      parameters:
+        - $ref: '#/components/parameters/ExceptionIdPathParam'
+      responses:
+        '200':
+          description: 分析完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionResponse'
+              examples:
+                analyzed:
+                  summary: 分析完成
+                  value:
+                    exception_id: exc-2026-0001
+                    source: instruction_failed
+                    instruction_id: ins-2026-0001
+                    description: 维修人员反馈导轨润滑油型号不匹配，无法执行
+                    status: ANALYZED
+                    analysis:
+                      root_cause: 润滑油型号不匹配
+                      suggestion: 更换正确型号润滑油
+                    created_at: '2026-07-09T10:30:00Z'
+                    updated_at: '2026-07-09T10:35:00Z'
+        '404':
+          description: 异常不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: 异常不存在
+                  value:
+                    error: EXCEPTION_NOT_FOUND
+                    message: 异常 ID 不存在
+  /api/agent/v1/execution/exceptions/{exception_id}/handle:
+    post:
+      tags:
+        - 执行智能体
+      summary: 推进异常状态为 HANDLED
+      description: 将 ANALYZED 状态的异常推进为 HANDLED，表示已处置完毕等待验证。
+      operationId: handleExecutionException
+      parameters:
+        - $ref: '#/components/parameters/ExceptionIdPathParam'
+      responses:
+        '200':
+          description: 处置完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionResponse'
+              examples:
+                handled:
+                  summary: 处置完成
+                  value:
+                    exception_id: exc-2026-0001
+                    source: instruction_failed
+                    instruction_id: ins-2026-0001
+                    description: 维修人员反馈导轨润滑油型号不匹配，无法执行
+                    status: HANDLED
+                    created_at: '2026-07-09T10:30:00Z'
+                    updated_at: '2026-07-09T11:00:00Z'
+        '400':
+          description: 状态不允许处置（非 ANALYZED）
           content:
             application/json:
               schema:
@@ -1587,7 +1662,7 @@ paths:
                   summary: 状态非法
                   value:
                     error: ILLEGAL_STATE_TRANSITION
-                    message: 异常当前状态不允许验证
+                    message: 异常当前状态不允许处置
   /api/agent/v1/orchestrator/device_fault_event:
     post:
       tags:
@@ -2814,6 +2889,17 @@ components:
           additionalProperties: true
         priority:
           $ref: '#/components/schemas/InstructionPriority'
+    ExecutionInstructionCreateResponse:
+      type: object
+      description: 创建执行指令响应（自动生成模式可能返回多条指令）
+      required:
+        - instructions
+      properties:
+        instructions:
+          type: array
+          description: 创建的指令列表
+          items:
+            $ref: '#/components/schemas/ExecutionInstructionResponse'
     ExecutionInstructionResponse:
       type: object
       description: 执行指令响应
@@ -2822,53 +2908,43 @@ components:
         - type
         - status
         - priority
+        - payload
+        - auto_execute
         - created_at
+        - updated_at
       properties:
         instruction_id:
           type: string
           description: 指令 ID
           example: ins-2026-0001
-        type:
-          $ref: '#/components/schemas/InstructionType'
-        status:
-          $ref: '#/components/schemas/InstructionStatus'
-        priority:
-          $ref: '#/components/schemas/InstructionPriority'
-        payload:
-          type: object
-          description: 指令载荷（具体结构由 type 决定）
-          nullable: true
-          additionalProperties: true
-        auto_execute:
-          type: boolean
-          description: 是否可自动执行（不可自动执行的指令必须人工审批）
-          example: false
         source_workflow_id:
           type: string
           description: 来源工作流 ID（手动创建时为 null）
           nullable: true
           example: wf-2026-0001
-        approved_by:
-          type: string
-          description: 审批人（未审批时为 null）
-          nullable: true
-          example: zhang_san
-        approved_at:
-          type: string
-          format: date-time
-          description: 审批时间（ISO-8601，未审批时为 null）
-          nullable: true
-          example: '2026-07-09T09:00:00Z'
-        completed_at:
-          type: string
-          format: date-time
-          description: 完成时间（ISO-8601，未完成时为 null）
-          nullable: true
-          example: '2026-07-09T10:00:00Z'
+        type:
+          $ref: '#/components/schemas/InstructionType'
+        payload:
+          type: object
+          description: 指令载荷（具体结构由 type 决定）
+          additionalProperties: true
+        status:
+          $ref: '#/components/schemas/InstructionStatus'
+        priority:
+          $ref: '#/components/schemas/InstructionPriority'
+        auto_execute:
+          type: boolean
+          description: 是否可自动执行（不可自动执行的指令必须人工审批）
+          example: false
         created_at:
           type: string
           format: date-time
           description: 创建时间（ISO-8601）
+          example: '2026-07-09T08:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间（ISO-8601）
           example: '2026-07-09T08:30:00Z'
     ExecutionInstructionListResponse:
       type: object
@@ -3022,6 +3098,24 @@ components:
           type: integer
           description: 每页大小
           example: 20
+    ExceptionVerifyResponse:
+      type: object
+      description: 异常验证响应
+      required:
+        - exception_id
+        - status
+      properties:
+        exception_id:
+          type: string
+          description: 异常 ID
+          example: exc-2026-0001
+        status:
+          $ref: '#/components/schemas/ExceptionStatus'
+        note:
+          type: string
+          description: 验证备注
+          nullable: true
+          example: 已更换正确型号润滑油并复测正常
     ExceptionVerifyRequest:
       type: object
       description: 异常验证请求体

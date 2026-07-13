@@ -121,8 +121,8 @@ bash scripts/stop_all.sh        # 停止所有本地服务
 | Phase 1 | 已完成 | 设备接入 + 数据采集 + API 网关 + InfluxDB 时序双写 + 可观测性基线；8 项 P0 + P1 问题修复   |
 | Phase 2 | 已完成 | 知识助手 Agent（RAG）+ 设备运维 Agent + Milvus 向量库 + JWT 鉴权 + P0 修复与全量重构   |
 | Phase 3 | 已完成 | 质量分析 Agent + 调度 Agent + LangGraph 多 Agent 编排；6 份审查报告已生成；BLOCK/P1/P2/P3 修复批次完成 |
-| Phase 4 | 规划中 | 执行协同 Agent + 全流程闭环（Kafka 事件驱动）（前置阻塞已修复）                          |
-| Phase 5 | 规划中 | 系统集成测试 + 产线试点                                                    |
+| Phase 4 | 已完成 | 执行协同 Agent + 全流程闭环（Kafka 事件驱动）+ 指令状态机 + 审批流程            |
+| Phase 5 | 规划中 | 前端页面开发 + C++ 原生层 + 系统集成测试                                 |
 
 **测试覆盖**：Java 57 个单元测试全部通过（0 失败）；Python 175 个测试通过、1 个预存失败（LLM_API_KEY 环境变量）、2 跳过；API 集成测试 11/12 通过（1 项预期失败：LM Studio 认证，SEC-4 设计）。
 
@@ -131,6 +131,8 @@ bash scripts/stop_all.sh        # 停止所有本地服务
 **Phase 2 交付**：agent-knowledge（4 接口）+ agent-maintenance（4 接口）+ shared 公共模块（llm\_client / vector\_store / observability）+ Milvus RAG 链路 + 网关路由与鉴权 + API 版本化（/v1 前缀）。详见 [Phase 2 说明](docs/explaination/project-explanation-phase2.md)。
 
 **Phase 3 交付**：agent-quality（4 接口）+ agent-scheduler（5 接口）+ agent-orchestrator（2 接口，LangGraph 编排）+ shared 公共层扩展（db.py 连接池公共模块 / db\_schema.sql / vector\_store 追加 smt\_quality\_cases / config 追加 quality\_\* / scheduler\_\*）+ 网关 5 条路由（`/api/agent/v1/<module>/**` + StripPrefix=2）+ API 契约 11 接口扩展。详见 [Phase 3 说明](docs/explaination/project-explanation-phase3.md)。
+
+**Phase 4 交付**：agent-execution（8 接口）+ shared 公共层扩展（kafka_client.py / text_utils.py）+ 指令状态机（PENDING→APPROVED→EXECUTING→COMPLETED/FAILED）+ 人工审批流程 + 异常闭环管理 + Kafka 事件驱动（device.anomaly 消费）+ 网关路由扩展 + API 契约扩展。详见 [Phase 4 说明](docs/explaination/project-explanation-phase4.md)。
 
 **未启动**：C++ 原生层（Phase 5 规划）、前端页面（骨架已搭建，待实际开发）。
 

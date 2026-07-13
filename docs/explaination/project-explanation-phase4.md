@@ -19,7 +19,7 @@
 
 **当前进度一句话**：Phase 4（执行协同 Agent + 全流程闭环 + Kafka 事件驱动）代码层面全量交付完成，73 个文件变更（+8716/-217 行），Python 301 测试全绿 + 19 skipped（覆盖率 77.95%），Java 57 测试全绿，6 份 Phase 4 专项审查报告已生成；智能体层从 Phase 3 的 5/5 扩展为 6/6（新增执行协同 Agent），打通了"事件驱动—编排—执行—审批—闭环"全链路；待用户确认后合并 `main`。
 
-**已交付**：`python-agents/agent-execution/`（端口 8006，9 接口，指令管理 + 审批 + 异常闭环 + Kafka 消费）、`python-agents/agent-orchestrator/` 扩展（execution_node + 图扩展为 5 节点 + 事件驱动入口 `device_fault_event`）、`python-agents/shared/kafka_client.py`（Kafka 事件总线公共模块 + 消费者封装）、`python-agents/shared/` 扩展（config 追加 Kafka/execution 配置 + db.py 追加 3 张表 CRUD + db_schema.sql 追加 3 张表 DDL + prompts 追加 execution prompt）、`java-backend/smt-gateway/` 新增 `/api/agent/v1/execution/**` 路由（含 Phase 1-3 路由统一升级为 `/api/agent/v1/` 版本前缀）、`api-contracts/openapi/agent_api.yaml` 新增 9 个 execution 接口 + 1 个 orchestrator 事件接口、`scripts/*.sh` 5 个脚本新增 agent-execution 支持、`pyproject.toml` 新增 `aiokafka>=0.11.0` 依赖；Phase 3 遗留的 P0 级工作流内存存储问题已迁移到 PostgreSQL 持久化，`shared/llm_client.py` 修复 `httpx.ConnectError` 未包装为 `LLMClientError` 的缺陷。
+**已交付**：`python-agents/agent-execution/`（端口 8006，11 接口，指令管理 + 审批 + 异常闭环 + 异常分析/处置 + Kafka 消费）、`python-agents/agent-orchestrator/` 扩展（execution_node + 图扩展为 5 节点 + 事件驱动入口 `device_fault_event`）、`python-agents/shared/kafka_client.py`（Kafka 事件总线公共模块 + 消费者封装）、`python-agents/shared/` 扩展（config 追加 Kafka/execution 配置 + db.py 追加 3 张表 CRUD + prompts 追加 execution prompt）、`database/init/01-schema.sql` 追加 3 张表 DDL、`java-backend/smt-gateway/` 新增 `/api/agent/v1/execution/**` 路由（含 Phase 1-3 路由统一升级为 `/api/agent/v1/` 版本前缀）、`api-contracts/openapi/agent_api.yaml` 新增 11 个 execution 接口 + 1 个 orchestrator 事件接口、`scripts/*.sh` 5 个脚本新增 agent-execution 支持、`pyproject.toml` 新增 `aiokafka>=0.11.0` 依赖；Phase 3 遗留的 P0 级工作流内存存储问题已迁移到 PostgreSQL 持久化，`shared/llm_client.py` 修复 `httpx.ConnectError` 未包装为 `LLMClientError` 的缺陷。
 
 **未交付**（属后续阶段）：前端可视化 ExecutionMonitor / ApprovalCenter 页面（spec 明确排除）；Java `smt-order-service` / `smt-quality-service` / `smt-notification-service` / `smt-agent-router` 业务实现（Phase 4+）；gRPC 跨语言契约（Phase 4+）；C++ 原生层（Phase 5）；PHM 深度学习模型 + 14 天预警（Phase 5+）；Kafka Streams / 复杂事件处理（spec 明确排除）；P2 功能（健康度报告、培训辅助、调度模拟）；流式 SSE 输出、独立 reranker 模型。
 
@@ -48,7 +48,7 @@
 | 1 | 从 `main` 切出 `feature/phase4-execution-closedloop` 分支 | ✅ | 分支名符合 AGENTS.md §5.1 |
 | 2 | `pyproject.toml` 追加 `aiokafka>=0.11.0`，`uv sync` 成功 | ✅ | 实际安装 aiokafka 0.14.0 |
 | 3 | `shared/config.py` 追加 Kafka 配置项与 execution agent 配置项 | ✅ | 13 项新增 |
-| 4 | `shared/db_schema.sql` 追加 `execution_instructions`、`exception_records`、`approvals` 三张表 DDL | ✅ | 含 8 个业务索引 |
+| 4 | `database/init/01-schema.sql` 追加 `execution_instructions`、`exception_records`、`approvals` 三张表 DDL | ✅ | 含 8 个业务索引，与 `shared/db.py` init_execution_tables() 一致 |
 | 5 | `shared/db.py` 追加三张表初始化与 CRUD 函数，幂等创建不报错 | ✅ | 35 测试通过 |
 
 #### 2.2.2 Kafka 事件总线
@@ -228,7 +228,7 @@ graph TB
     AO -->|"HTTP"| AS
     AO -->|"HTTP POST /v1/execution/instructions"| EX
     AO -->|"LLM 汇总"| LLM
-    EX -->|"HTTP POST /v1/orchestrator/device_fault"| AO
+    EX -->|"HTTP POST /v1/orchestrator/device_fault_event"| AO
 
     AK ---|依赖| Shared
     AM ---|依赖| Shared
@@ -283,7 +283,7 @@ graph TB
 
 | 技术 | 版本 | 用途 | 对应源文件链接 |
 |---|---|---|---|
-| PostgreSQL | 16 | 业务主库（新增 3 张表 + workflows 表持久化） | [`db_schema.sql`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db_schema.sql) |
+| PostgreSQL | 16 | 业务主库（新增 3 张表 + workflows 表持久化） | [`database/init/01-schema.sql`](file:///home/north30/projects/Personal/smt-agent-platform/database/init/01-schema.sql) |
 | Kafka | 2.8+ | 事件总线（device.anomaly / execution.instruction / exception.record） | [`kafka_client.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/kafka_client.py) |
 
 ### 3.4 系统交互流程
@@ -418,13 +418,15 @@ sequenceDiagram
 | 接口 | 方法 | 路径 | 说明 |
 |---|---|---|---|
 | 创建指令 | POST | `/v1/execution/instructions` | 自动生成（source_workflow_id）与人工创建（type+payload）双模式 |
-| 指令列表 | GET | `/v1/execution/instructions` | 分页查询，支持 status/type 过滤 |
+| 指令列表 | GET | `/v1/execution/instructions` | 分页查询，支持 status/instruction_type 过滤 |
 | 指令详情 | GET | `/v1/execution/instructions/{id}` | 单条查询，不存在返回 404 |
 | 审批指令 | POST | `/v1/execution/instructions/{id}/approve` | 仅 PENDING_APPROVAL/PENDING 状态可审批 |
 | 进度上报 | POST | `/v1/execution/instructions/{id}/progress` | 状态机校验（非法跳转抛 ValueError→400） |
 | 创建异常 | POST | `/v1/execution/exceptions` | 录入异常记录，初始状态 OPEN |
 | 异常列表 | GET | `/v1/execution/exceptions` | 分页查询，支持 status 过滤 |
 | 异常验证 | POST | `/v1/execution/exceptions/{id}/verify` | 通过→CLOSED，失败→重新 OPEN |
+| 异常分析 | POST | `/v1/execution/exceptions/{id}/analyze` | LLM 根因分析，状态推进为 ANALYZED |
+| 异常处置 | POST | `/v1/execution/exceptions/{id}/handle` | 状态推进 ANALYZED→HANDLED |
 | 健康检查 | GET | `/healthz` | structlog + uptime |
 
 **核心模块**：
@@ -508,7 +510,7 @@ sequenceDiagram
 | `kafka_client.py` | **新增**：aiokafka producer/consumer 封装，模块级单例 + 降级兜底 | [`kafka_client.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/kafka_client.py) |
 | `config.py` | 追加 13 项配置：`kafka_bootstrap_servers` / `kafka_consumer_group` / `kafka_topic_device_anomaly` / `kafka_topic_execution_instruction` / `kafka_topic_exception_record` / `kafka_enabled` / `execution_auto_approve_priorities` / `execution_require_approval_types` / `execution_require_approval_priorities` / `agent_execution_base_url` / `db_pool_min_size` / `db_pool_max_size` / `db_pool_max_queries` | [`config.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/config.py) |
 | `db.py` | 新增函数：`init_execution_tables()`（幂等创建 3 张表）+ `create_instruction()` / `get_instruction()` / `list_instructions()` / `update_instruction_status()` + `create_exception()` / `get_exception()` / `list_exceptions()` / `update_exception_status()` + `create_approval()` / `get_approvals_by_instruction()`；`get_pg_pool()` 双检锁修复（消除 doc_meta_store/order_store/alert_store 三处独立 `_pool` 竞态）；`save_workflow` / `get_workflow` 工作流 PG 持久化 | [`db.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db.py) |
-| `db_schema.sql` | 追加 3 张表 DDL：`execution_instructions`（含 source_workflow_id/type/priority/status/payload JSONB/auto_execute 等 12 列 + 5 索引）、`exception_records`（含 source/workflow_id/description/analysis JSONB/status 等 8 列 + 2 索引）、`approvals`（含 instruction_id/decision/approver/note 等 6 列 + 1 索引） | [`db_schema.sql`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db_schema.sql) |
+| `database/init/01-schema.sql` | 追加 3 张表 DDL：`execution_instructions`（含 source_workflow_id/type/priority/status/payload JSONB/auto_execute 等 12 列 + 5 索引）、`exception_records`（含 source/workflow_id/description/analysis JSONB/status 等 8 列 + 2 索引）、`approvals`（含 instruction_id/decision/approver/note 等 6 列 + 1 索引） | [`database/init/01-schema.sql`](file:///home/north30/projects/Personal/smt-agent-platform/database/init/01-schema.sql) |
 | `prompts/system_prompt.yaml` | 追加 execution agent 角色 prompt（异常分析专家） | [`system_prompt.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/prompts/system_prompt.yaml) |
 | `llm_client.py` | **修复**：`reraise=True` 时 `httpx.ConnectError` 未包装为 `LLMClientError` 的缺陷，chat/embed 函数重试耗尽后捕获 `(httpx.TimeoutException, httpx.ConnectError)` 并包装为 `LLMClientError`，使 summary_node/exception_service 的 `except LLMClientError` 降级逻辑生效 | [`llm_client.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/llm_client.py) |
 
@@ -619,7 +621,7 @@ graph BT
     AO -->|"HTTP /v1/quality/root_cause"| AQ
     AO -->|"HTTP /v1/scheduler/urgent"| AS
     AO -->|"HTTP POST /v1/execution/instructions"| EX
-    EX -->|"HTTP POST /v1/orchestrator/device_fault"| AO
+    EX -->|"HTTP POST /v1/orchestrator/device_fault_event"| AO
     EX -->|"aiokafka 消费"| Kafka
 
     AQ -->|"AsyncClient"| DS
@@ -648,7 +650,7 @@ python-agents/
 │   ├── [kafka_client.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/kafka_client.py)          **新增**：Kafka 事件总线（producer/consumer 封装 + 降级兜底）
 │   ├── [config.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/config.py)                       Settings 单例（Phase 4 追加 13 项配置）
 │   ├── [db.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db.py)                               PG 连接池公共模块 + 3 张 execution 表 CRUD + 工作流持久化
-│   ├── [db_schema.sql](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db_schema.sql)              +3 张表 DDL（execution_instructions / exception_records / approvals）
+│   ├── [database/init/01-schema.sql](file:///home/north30/projects/Personal/smt-agent-platform/database/init/01-schema.sql)              +3 张表 DDL（execution_instructions / exception_records / approvals），集中管理
 │   ├── [llm_client.py](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/llm_client.py)               **修复**：httpx.ConnectError 包装为 LLMClientError
 │   └── [prompts/system_prompt.yaml](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/prompts/system_prompt.yaml)  + execution 角色 prompt
 ├── agent-execution/                    执行协同（端口 8006，Phase 4 新增）
@@ -685,7 +687,7 @@ graph TB
         LLM["llm_client<br/>+ ConnectError→LLMClientError 修复"]
         KafkaCli["kafka_client<br/>publish + start_consumer<br/>+ stop_consumer + aclose"]
         DB["db.py<br/>get_pg_pool() 双检锁<br/>+ 3 张表 CRUD<br/>+ save_workflow / get_workflow"]
-        DBSchema["db_schema.sql<br/>+ 3 张表 DDL"]
+        DBSchema["database/init/01-schema.sql<br/>+ 3 张表 DDL（集中管理）"]
         Prompt["prompts/system_prompt.yaml<br/>+ execution prompt"]
     end
 
@@ -711,7 +713,7 @@ graph TB
         LLM_API[("大模型 API")]
         PG[("PostgreSQL")]
         ExecAgent["agent-execution:8006<br/>POST /v1/execution/instructions"]
-        OrchAgent["agent-orchestrator:8005<br/>POST /v1/orchestrator/device_fault"]
+        OrchAgent["agent-orchestrator:8005<br/>POST /v1/orchestrator/device_fault_event"]
     end
 
     EXMain --> IS
@@ -756,14 +758,14 @@ Kafka device.anomaly 事件
   → agent-execution lifespan 启动的 Kafka 消费者后台任务
   → kafka_consumer._handle_device_anomaly(message) async
       └─ message.get("device_id"), message.get("symptom")
-      └─ httpx.AsyncClient POST /v1/orchestrator/device_fault
+      └─ httpx.AsyncClient POST /v1/orchestrator/device_fault_event
           [orchestrator 不可达 → 写入 exception_records, return]
       └─ orchestrator 返回 WorkflowResponse (含 instructions)
       └─ 对 instructions 逐条 create_instruction (自动生成模   式)
             └─ db.create_instruction(...)
   → 消费循环继续
 
- orchestrator POST /v1/orchestrator/device_fault
+ orchestrator POST /v1/orchestrator/device_fault_event
   → main.device_fault_event(req) async
       └─ _run_device_fault_workflow(initial_state) async
             └─ app_graph.ainvoke(initial_state)    [LangGraph 5 节点顺序执行]
@@ -838,11 +840,11 @@ POST /v1/execution/exceptions/{id}/verify
 
 ### 5.5 文件清单与职责矩阵
 
-#### 5.5.1 `agent-execution/`（6 个文件）
+#### 5.5.1 `agent-execution/`（7 个文件）
 
 | 文件 | 维度 | 职责 |
 |---|---|---|
-| [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-execution/main.py) | 入口 | FastAPI 9 接口 + /v1/ + async + /healthz + lifespan + 3 类异常处理器 |
+| [`main.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-execution/main.py) | 入口 | FastAPI 11 接口 + /v1/ + async + /healthz + lifespan + 3 类异常处理器 |
 | [`instruction_service.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-execution/instruction_service.py) | 业务 | 指令创建（双模式）+ 查询 + 状态机进度更新 + 自动执行判定 |
 | [`approval_service.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-execution/approval_service.py) | 业务 | 审批/驳回业务规则 + 状态判定 + 审批记录写入 |
 | [`exception_service.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/agent-execution/exception_service.py) | 业务 | 异常记录 + LLM 分析（含降级）+ 验证闭环 |
@@ -867,7 +869,7 @@ POST /v1/execution/exceptions/{id}/verify
 | [`kafka_client.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/kafka_client.py) | 事件总线 | **新增**：aiokafka producer/consumer 封装 + 模块级单例 + 降级兜底 |
 | [`config.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/config.py) | 配置 | 追加 13 项 Phase 4 配置 |
 | [`db.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db.py) | 持久化 | + 3 张 execution 表 CRUD + get_pg_pool() 双检锁修复 + 工作流 PG 持久化 |
-| [`db_schema.sql`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/db_schema.sql) | 持久化 | + 3 张表 DDL（execution_instructions / exception_records / approvals） |
+| [`database/init/01-schema.sql`](file:///home/north30/projects/Personal/smt-agent-platform/database/init/01-schema.sql) | 持久化 | + 3 张表 DDL（execution_instructions / exception_records / approvals），与 `shared/db.py` init_execution_tables() 保持一致 |
 | [`llm_client.py`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/llm_client.py) | 外部调用 | **修复**：httpx.ConnectError 包装为 LLMClientError |
 | [`prompts/system_prompt.yaml`](file:///home/north30/projects/Personal/smt-agent-platform/python-agents/shared/prompts/system_prompt.yaml) | Prompt | + execution 角色 prompt |
 

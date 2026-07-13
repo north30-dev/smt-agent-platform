@@ -116,6 +116,11 @@ async def create_case(req: CaseCreateRequest):
     return CaseCreateResponse(case_id=case_id)
 
 
+# ---------------------------------------------------------------------------
+# 异常处理器
+# ---------------------------------------------------------------------------
+
+
 @app.exception_handler(DeviceServiceUnavailable)
 async def device_service_unavailable_handler(_request, exc: DeviceServiceUnavailable):
     """device-service 不可达 → 503。"""

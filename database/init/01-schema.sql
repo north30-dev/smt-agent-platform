@@ -165,3 +165,53 @@ CREATE TABLE IF NOT EXISTS workflows (
     created_at TIMESTAMP DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_workflows_created_at ON workflows(created_at);
+
+-- =============================================================================
+-- Phase 4 表
+-- =============================================================================
+-- 集中维护 Phase 4 新增的 execution_instructions、exception_records、approvals 三张表 DDL
+-- 与 shared/db.py init_execution_tables() 保持一致
+
+-- 执行指令表（agent-execution 写入）
+CREATE TABLE IF NOT EXISTS execution_instructions (
+    id BIGSERIAL PRIMARY KEY,
+    instruction_id VARCHAR(64) NOT NULL UNIQUE,
+    source_workflow_id VARCHAR(64),
+    type VARCHAR(32) NOT NULL,
+    payload JSONB NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    priority VARCHAR(16) NOT NULL DEFAULT 'MEDIUM',
+    auto_execute BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_execution_instructions_source_workflow_id ON execution_instructions(source_workflow_id);
+CREATE INDEX IF NOT EXISTS idx_execution_instructions_status ON execution_instructions(status);
+CREATE INDEX IF NOT EXISTS idx_execution_instructions_type ON execution_instructions(type);
+CREATE INDEX IF NOT EXISTS idx_execution_instructions_priority ON execution_instructions(priority);
+
+-- 异常记录表（agent-execution 写入）
+CREATE TABLE IF NOT EXISTS exception_records (
+    id BIGSERIAL PRIMARY KEY,
+    exception_id VARCHAR(64) NOT NULL UNIQUE,
+    source VARCHAR(64) NOT NULL,
+    instruction_id VARCHAR(64),
+    description TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'OPEN',
+    analysis JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_exception_records_status ON exception_records(status);
+CREATE INDEX IF NOT EXISTS idx_exception_records_instruction_id ON exception_records(instruction_id);
+
+-- 审批记录表（agent-execution 写入）
+CREATE TABLE IF NOT EXISTS approvals (
+    id BIGSERIAL PRIMARY KEY,
+    instruction_id VARCHAR(64) NOT NULL,
+    decision VARCHAR(16) NOT NULL,
+    approver VARCHAR(64),
+    comment TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_approvals_instruction_id ON approvals(instruction_id);

@@ -76,8 +76,8 @@ async def _handle_device_anomaly(message: dict) -> None:
             return
         client = _get_client()
         resp = await client.post(
-            f"{settings.agent_orchestrator_base_url}/v1/orchestrator/device_fault",
-            json={"device_id": device_id, "symptom": symptom},
+            f"{settings.agent_orchestrator_base_url}/v1/orchestrator/device_fault_event",
+            json={"device_id": device_id, "symptom": symptom, "source": "kafka_device_anomaly"},
         )
         resp.raise_for_status()
         workflow = resp.json()
