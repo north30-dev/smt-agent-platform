@@ -6,6 +6,8 @@ import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.model.entity.DeviceData;
 import com.smt.platform.device.service.DeviceService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -25,13 +27,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * HealthScoreCalculator 单元测试。
- *
- * <p>覆盖：运行态无数据 / 温度超阈值 / 振动超阈值 / 温度+振动叠加 /
- * 维修态 / 停机态 / 非数字 value 忽略 / 同一采集点去重 / 设备不存在 /
- * refreshHealthScore 触发 updateById 等场景。</p>
- *
- * <p>m8 改造后，{@link HealthScoreProperties} 通过 {@code @Mock} + {@code @BeforeEach} stub
- * 12 字段默认值（与原硬编码一致），保证测试断言值不变。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class HealthScoreCalculatorTest {
@@ -53,8 +48,6 @@ class HealthScoreCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        // m8：stub HealthScoreProperties 12 字段默认值（与原硬编码完全一致）
-        // 使用 lenient() 因为不是所有测试都用到所有字段（避免 UnnecessaryStubbingException）
         lenient().when(props.getScoreMaintenance()).thenReturn(30);
         lenient().when(props.getScoreStopped()).thenReturn(50);
         lenient().when(props.getBaseScore()).thenReturn(100);
@@ -69,99 +62,114 @@ class HealthScoreCalculatorTest {
         lenient().when(props.getDeductionLow()).thenReturn(20);
     }
 
-    // -------- calculate 评分逻辑 --------
+    @Nested
+    @DisplayName("calculate")
+    class CalculateTest {
 
-    @Test
-    void calculate_shouldReturn100_whenRunningAndNoData() {
-        Device d = buildDevice("RUNNING");
-        assertThat(calculator.calculate(d, List.of())).isEqualTo(100);
+        @Test
+        @DisplayName("should return 100 when running and no data")
+        void shouldReturn100_whenRunningAndNoData() {
+            Device d = buildDevice("RUNNING");
+            assertThat(calculator.calculate(d, List.of())).isEqualTo(100);
+        }
+
+        @Test
+        @DisplayName("should return 80 when temperature above 80")
+        void shouldReturn80_whenTempAbove80() {
+            Device d = buildDevice("RUNNING");
+            List<DeviceData> data = List.of(buildData("TEMP-01", "85"));
+            assertThat(calculator.calculate(d, data)).isEqualTo(80);
+        }
+
+        @Test
+        @DisplayName("should return 60 when temperature above 100")
+        void shouldReturn60_whenTempAbove100() {
+            Device d = buildDevice("RUNNING");
+            List<DeviceData> data = List.of(buildData("TEMP-01", "105"));
+            assertThat(calculator.calculate(d, data)).isEqualTo(60);
+        }
+
+        @Test
+        @DisplayName("should return 80 when vibration above 10")
+        void shouldReturn80_whenVibrationAbove10() {
+            Device d = buildDevice("RUNNING");
+            List<DeviceData> data = List.of(buildData("VIBRATION-01", "15"));
+            assertThat(calculator.calculate(d, data)).isEqualTo(80);
+        }
+
+        @Test
+        @DisplayName("should return 40 when temperature 85 and vibration 25")
+        void shouldReturn40_whenTemp85AndVibration25() {
+            Device d = buildDevice("RUNNING");
+            List<DeviceData> data = List.of(
+                    buildData("TEMP-01", "85"),
+                    buildData("VIBRATION-01", "25")
+            );
+            assertThat(calculator.calculate(d, data)).isEqualTo(40);
+        }
+
+        @Test
+        @DisplayName("should return 30 when maintenance")
+        void shouldReturn30_whenMaintenance() {
+            Device d = buildDevice("MAINTENANCE");
+            assertThat(calculator.calculate(d, List.of())).isEqualTo(30);
+        }
+
+        @Test
+        @DisplayName("should return 50 when stopped")
+        void shouldReturn50_whenStopped() {
+            Device d = buildDevice("STOPPED");
+            assertThat(calculator.calculate(d, List.of())).isEqualTo(50);
+        }
+
+        @Test
+        @DisplayName("should ignore non-numeric value when default")
+        void shouldIgnoreNonNumericValue_whenDefault() {
+            Device d = buildDevice("RUNNING");
+            List<DeviceData> data = List.of(buildData("TEMP-01", "abc"));
+            assertThat(calculator.calculate(d, data)).isEqualTo(100);
+        }
+
+        @Test
+        @DisplayName("should only use latest value per datapoint when duplicate exists")
+        void shouldOnlyUseLatestPerDatapoint_whenDuplicateExists() {
+            Device d = buildDevice("RUNNING");
+            List<DeviceData> data = List.of(
+                    buildData("TEMP-01", "85", LocalDateTime.of(2026, 6, 27, 10, 0)),
+                    buildData("TEMP-01", "90", LocalDateTime.of(2026, 6, 27, 10, 5))
+            );
+            assertThat(calculator.calculate(d, data)).isEqualTo(80);
+        }
     }
 
-    @Test
-    void calculate_shouldReturn80_whenTempAbove80() {
-        Device d = buildDevice("RUNNING");
-        List<DeviceData> data = List.of(buildData("TEMP-01", "85"));
-        assertThat(calculator.calculate(d, data)).isEqualTo(80);
-    }
+    @Nested
+    @DisplayName("refreshHealthScore")
+    class RefreshHealthScoreTest {
 
-    @Test
-    void calculate_shouldReturn60_whenTempAbove100() {
-        Device d = buildDevice("RUNNING");
-        List<DeviceData> data = List.of(buildData("TEMP-01", "105"));
-        assertThat(calculator.calculate(d, data)).isEqualTo(60);
-    }
+        @Test
+        @DisplayName("should skip and not update when device does not exist")
+        void shouldSkipAndNotUpdate_whenDeviceNotExists() {
+            when(deviceService.getById(1L)).thenReturn(null);
 
-    @Test
-    void calculate_shouldReturn80_whenVibrationAbove10() {
-        Device d = buildDevice("RUNNING");
-        List<DeviceData> data = List.of(buildData("VIBRATION-01", "15"));
-        assertThat(calculator.calculate(d, data)).isEqualTo(80);
-    }
+            calculator.refreshHealthScore(1L);
 
-    @Test
-    void calculate_shouldReturn40_whenTemp85AndVibration25() {
-        Device d = buildDevice("RUNNING");
-        List<DeviceData> data = List.of(
-                buildData("TEMP-01", "85"),
-                buildData("VIBRATION-01", "25")
-        );
-        // 100 - 20（温度 >80）- 40（振动 >20）= 40
-        assertThat(calculator.calculate(d, data)).isEqualTo(40);
-    }
+            verify(deviceMapper, never()).updateById(any(Device.class));
+        }
 
-    @Test
-    void calculate_shouldReturn30_whenMaintenance() {
-        Device d = buildDevice("MAINTENANCE");
-        assertThat(calculator.calculate(d, List.of())).isEqualTo(30);
-    }
+        @Test
+        @DisplayName("should update health score when maintenance")
+        void shouldUpdateHealthScore_whenMaintenance() {
+            Device d = buildDevice("MAINTENANCE");
+            when(deviceService.getById(1L)).thenReturn(d);
 
-    @Test
-    void calculate_shouldReturn50_whenStopped() {
-        Device d = buildDevice("STOPPED");
-        assertThat(calculator.calculate(d, List.of())).isEqualTo(50);
-    }
+            calculator.refreshHealthScore(1L);
 
-    @Test
-    void calculate_shouldIgnoreNonNumericValue() {
-        Device d = buildDevice("RUNNING");
-        List<DeviceData> data = List.of(buildData("TEMP-01", "abc"));
-        assertThat(calculator.calculate(d, data)).isEqualTo(100);
-    }
-
-    @Test
-    void calculate_shouldOnlyUseLatestPerDatapoint() {
-        Device d = buildDevice("RUNNING");
-        // 同一采集点 TEMP-01 两条记录，仅取 timestamp 最大者（90，>80）扣 20
-        List<DeviceData> data = List.of(
-                buildData("TEMP-01", "85", LocalDateTime.of(2026, 6, 27, 10, 0)),
-                buildData("TEMP-01", "90", LocalDateTime.of(2026, 6, 27, 10, 5))
-        );
-        assertThat(calculator.calculate(d, data)).isEqualTo(80);
-    }
-
-    // -------- refreshHealthScore 集成 --------
-
-    @Test
-    void refreshHealthScore_shouldSkipAndNotUpdate_whenDeviceNotExists() {
-        when(deviceService.getById(1L)).thenReturn(null);
-
-        calculator.refreshHealthScore(1L);
-
-        verify(deviceMapper, never()).updateById(any(Device.class));
-    }
-
-    @Test
-    void refreshHealthScore_shouldUpdateHealthScore_whenMaintenance() {
-        Device d = buildDevice("MAINTENANCE");
-        when(deviceService.getById(1L)).thenReturn(d);
-
-        calculator.refreshHealthScore(1L);
-
-        ArgumentCaptor<Device> captor = ArgumentCaptor.forClass(Device.class);
-        verify(deviceMapper).updateById(captor.capture());
-        Device updated = captor.getValue();
-        assertThat(updated.getId()).isEqualTo(1L);
-        assertThat(updated.getHealthScore()).isEqualTo(30);
+            ArgumentCaptor<Device> captor = ArgumentCaptor.forClass(Device.class);
+            verify(deviceMapper).updateById(captor.capture());
+            Device updated = captor.getValue();
+            assertThat(updated.getId()).isEqualTo(1L);
+            assertThat(updated.getHealthScore()).isEqualTo(30);
+        }
     }
 
     private Device buildDevice(String status) {

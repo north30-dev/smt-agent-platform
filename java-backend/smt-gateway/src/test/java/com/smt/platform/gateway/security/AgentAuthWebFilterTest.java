@@ -1,6 +1,8 @@
 package com.smt.platform.gateway.security;
 
 import com.smt.platform.common.utils.JwtUtil;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
@@ -13,13 +15,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * AgentAuthWebFilter 集成测试（P0-4）。
- *
- * <p>用 {@code @SpringBootTest(RANDOM_PORT)} + {@code @AutoConfigureWebTestClient} 启动完整
- * reactive 网关上下文，验证 JWT 鉴权过滤器对 {@code /api/agent/**} 的拦截行为。</p>
- *
- * <p>{@code @Import(JwtUtil.class)} 显式引入 JwtUtil Bean（与 AgentAuthWebFilter 上的 @Import 互为保险），
- * 测试中注入 JwtUtil 用于签发合法 token。</p>
+ * AgentAuthWebFilter 集成测试。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
@@ -32,91 +28,90 @@ class AgentAuthWebFilterTest {
     @Autowired
     private JwtUtil jwtUtil;
 
-    @Test
-    void test_no_token_returns_401() {
-        webTestClient.get().uri("/api/agent/knowledge/documents")
-                .exchange()
-                .expectStatus().isEqualTo(401)
-                .expectBody()
-                .jsonPath("$.error").isEqualTo("unauthorized")
-                .jsonPath("$.message").isEqualTo("token 缺失");
-    }
+    @Nested
+    @DisplayName("filter authentication")
+    class FilterAuthenticationTest {
 
-    @Test
-    void test_invalid_token_returns_401() {
-        webTestClient.get().uri("/api/agent/knowledge/documents")
-                .header("Authorization", "Bearer invalid.token.here")
-                .exchange()
-                .expectStatus().isEqualTo(401)
-                .expectBody()
-                .jsonPath("$.error").isEqualTo("unauthorized")
-                .jsonPath("$.message").isEqualTo("token 无效或已过期");
-    }
+        @Test
+        @DisplayName("should return 401 when no token")
+        void shouldReturn401_whenNoToken() {
+            webTestClient.get().uri("/api/agent/knowledge/documents")
+                    .exchange()
+                    .expectStatus().isEqualTo(401)
+                    .expectBody()
+                    .jsonPath("$.error").isEqualTo("unauthorized")
+                    .jsonPath("$.message").isEqualTo("token 缺失");
+        }
 
-    @Test
-    void test_valid_token_passes_filter() {
-        String token = jwtUtil.generateToken("test-user", List.of("ADMIN"), 3600000L);
-        // filter 放行后路由转发到后端 8004（未启动），网关返回 5xx，但不应是 401
-        webTestClient.get().uri("/api/agent/knowledge/documents")
-                .header("Authorization", "Bearer " + token)
-                .exchange()
-                .expectStatus().value(status -> assertThat(status)
-                        .as("合法 token 不应被 filter 拦截返回 401")
-                        .isNotEqualTo(401));
-    }
+        @Test
+        @DisplayName("should return 401 when token is invalid")
+        void shouldReturn401_whenTokenIsInvalid() {
+            webTestClient.get().uri("/api/agent/knowledge/documents")
+                    .header("Authorization", "Bearer invalid.token.here")
+                    .exchange()
+                    .expectStatus().isEqualTo(401)
+                    .expectBody()
+                    .jsonPath("$.error").isEqualTo("unauthorized")
+                    .jsonPath("$.message").isEqualTo("token 无效或已过期");
+        }
 
-    @Test
-    void test_device_path_not_intercepted() {
-        // /api/device/** 不被 filter 拦截，后端 8081 未启动返回 5xx，但不应是 401
-        webTestClient.get().uri("/api/device/1")
-                .exchange()
-                .expectStatus().value(status -> assertThat(status)
-                        .as("/api/device/** 不应被 AgentAuthWebFilter 拦截返回 401")
-                        .isNotEqualTo(401));
-    }
+        @Test
+        @DisplayName("should pass filter when token is valid")
+        void shouldPassFilter_whenTokenIsValid() {
+            String token = jwtUtil.generateToken("test-user", List.of("ADMIN"), 3600000L);
+            webTestClient.get().uri("/api/agent/knowledge/documents")
+                    .header("Authorization", "Bearer " + token)
+                    .exchange()
+                    .expectStatus().value(status -> assertThat(status)
+                            .as("合法 token 不应被 filter 拦截返回 401")
+                            .isNotEqualTo(401));
+        }
 
-    /**
-     * 补齐 phase2 B-10 盲区：maintenance 路由匹配守护。
-     * 合法 token 访问 /api/agent/maintenance/** 应被放行（非 401）。
-     */
-    @Test
-    void test_valid_token_passes_maintenance_route() {
-        String token = jwtUtil.generateToken("test-user", List.of("ADMIN"), 3600000L);
-        webTestClient.get().uri("/api/agent/maintenance/health/1")
-                .header("Authorization", "Bearer " + token)
-                .exchange()
-                .expectStatus().value(status -> assertThat(status)
-                        .as("合法 token 访问 maintenance 路由不应被 filter 拦截返回 401")
-                        .isNotEqualTo(401));
-    }
+        @Test
+        @DisplayName("should not intercept device path when default")
+        void shouldNotInterceptDevicePath_whenDefault() {
+            webTestClient.get().uri("/api/device/1")
+                    .exchange()
+                    .expectStatus().value(status -> assertThat(status)
+                            .as("/api/device/** 不应被 AgentAuthWebFilter 拦截返回 401")
+                            .isNotEqualTo(401));
+        }
 
-    /**
-     * 补齐 S-SEC-4：过期 token 应返回 401。
-     */
-    @Test
-    void test_expired_token_returns_401() {
-        // expireMs 为负，生成的 token 立即过期
-        String expiredToken = jwtUtil.generateToken("test-user", List.of("ADMIN"), -1000L);
-        webTestClient.get().uri("/api/agent/knowledge/documents")
-                .header("Authorization", "Bearer " + expiredToken)
-                .exchange()
-                .expectStatus().isEqualTo(401)
-                .expectBody()
-                .jsonPath("$.error").isEqualTo("unauthorized")
-                .jsonPath("$.message").isEqualTo("token 无效或已过期");
-    }
+        @Test
+        @DisplayName("should pass maintenance route when token is valid")
+        void shouldPassMaintenanceRoute_whenTokenIsValid() {
+            String token = jwtUtil.generateToken("test-user", List.of("ADMIN"), 3600000L);
+            webTestClient.get().uri("/api/agent/maintenance/health/1")
+                    .header("Authorization", "Bearer " + token)
+                    .exchange()
+                    .expectStatus().value(status -> assertThat(status)
+                            .as("合法 token 访问 maintenance 路由不应被 filter 拦截返回 401")
+                            .isNotEqualTo(401));
+        }
 
-    /**
-     * 补齐 S-SEC-4：非 Bearer 前缀（如 Basic）应返回 401。
-     */
-    @Test
-    void test_non_bearer_prefix_returns_401() {
-        webTestClient.get().uri("/api/agent/knowledge/documents")
-                .header("Authorization", "Basic some-base64-credentials")
-                .exchange()
-                .expectStatus().isEqualTo(401)
-                .expectBody()
-                .jsonPath("$.error").isEqualTo("unauthorized")
-                .jsonPath("$.message").isEqualTo("token 缺失");
+        @Test
+        @DisplayName("should return 401 when token is expired")
+        void shouldReturn401_whenTokenIsExpired() {
+            String expiredToken = jwtUtil.generateToken("test-user", List.of("ADMIN"), -1000L);
+            webTestClient.get().uri("/api/agent/knowledge/documents")
+                    .header("Authorization", "Bearer " + expiredToken)
+                    .exchange()
+                    .expectStatus().isEqualTo(401)
+                    .expectBody()
+                    .jsonPath("$.error").isEqualTo("unauthorized")
+                    .jsonPath("$.message").isEqualTo("token 无效或已过期");
+        }
+
+        @Test
+        @DisplayName("should return 401 when authorization prefix is not Bearer")
+        void shouldReturn401_whenAuthorizationPrefixIsNotBearer() {
+            webTestClient.get().uri("/api/agent/knowledge/documents")
+                    .header("Authorization", "Basic some-base64-credentials")
+                    .exchange()
+                    .expectStatus().isEqualTo(401)
+                    .expectBody()
+                    .jsonPath("$.error").isEqualTo("unauthorized")
+                    .jsonPath("$.message").isEqualTo("token 缺失");
+        }
     }
 }

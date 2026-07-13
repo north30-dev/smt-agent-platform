@@ -7,6 +7,8 @@ import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.model.entity.DeviceDataPoint;
 import com.smt.platform.device.service.impl.DeviceDataPointServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -39,55 +41,66 @@ class DeviceDataPointServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        // ServiceImpl.baseMapper 由父类声明为 protected 字段，构造器注入只会注入
-        // DeviceMapper，这里显式注入主 Mapper，避免依赖 @InjectMocks 的字段注入策略。
         ReflectionTestUtils.setField(service, "baseMapper", deviceDataPointMapper);
     }
 
-    @Test
-    void create_shouldInsert_whenDeviceExists() {
-        Device existing = new Device();
-        existing.setId(1L);
-        when(deviceMapper.selectById(1L)).thenReturn(existing);
-        when(deviceDataPointMapper.insert(any(DeviceDataPoint.class))).thenReturn(1);
+    @Nested
+    @DisplayName("create")
+    class CreateTest {
 
-        DeviceDataPoint datapoint = new DeviceDataPoint();
-        datapoint.setDatapointCode("TEMP-01");
-        datapoint.setDatapointName("印刷机温度");
-        datapoint.setNodePath("ns=2;s=Temperature");
-        datapoint.setDataType("NUMBER");
-        datapoint.setSampleIntervalMs(1000);
+        @Test
+        @DisplayName("should insert datapoint when device exists")
+        void shouldInsert_whenDeviceExists() {
+            Device existing = new Device();
+            existing.setId(1L);
+            when(deviceMapper.selectById(1L)).thenReturn(existing);
+            when(deviceDataPointMapper.insert(any(DeviceDataPoint.class))).thenReturn(1);
 
-        DeviceDataPoint created = service.create(1L, datapoint);
+            DeviceDataPoint datapoint = new DeviceDataPoint();
+            datapoint.setDatapointCode("TEMP-01");
+            datapoint.setDatapointName("印刷机温度");
+            datapoint.setNodePath("ns=2;s=Temperature");
+            datapoint.setDataType("NUMBER");
+            datapoint.setSampleIntervalMs(1000);
 
-        assertThat(created.getDeviceId()).isEqualTo(1L);
-        assertThat(created.getDatapointCode()).isEqualTo("TEMP-01");
-        assertThat(created.getCreateTime()).isNotNull();
-        verify(deviceDataPointMapper).insert(any(DeviceDataPoint.class));
+            DeviceDataPoint created = service.create(1L, datapoint);
+
+            assertThat(created.getDeviceId()).isEqualTo(1L);
+            assertThat(created.getDatapointCode()).isEqualTo("TEMP-01");
+            assertThat(created.getCreateTime()).isNotNull();
+            verify(deviceDataPointMapper).insert(any(DeviceDataPoint.class));
+        }
+
+        @Test
+        @DisplayName("should throw BizException when device does not exist")
+        void shouldThrowBizException_whenDeviceNotExists() {
+            when(deviceMapper.selectById(1L)).thenReturn(null);
+
+            DeviceDataPoint datapoint = new DeviceDataPoint();
+            datapoint.setDatapointCode("TEMP-01");
+
+            assertThatThrownBy(() -> service.create(1L, datapoint))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("设备不存在");
+        }
     }
 
-    @Test
-    void create_shouldThrow_whenDeviceNotExists() {
-        when(deviceMapper.selectById(1L)).thenReturn(null);
+    @Nested
+    @DisplayName("listByDeviceId")
+    class ListByDeviceIdTest {
 
-        DeviceDataPoint datapoint = new DeviceDataPoint();
-        datapoint.setDatapointCode("TEMP-01");
+        @Test
+        @DisplayName("should return list when default")
+        void shouldReturnList_whenDefault() {
+            DeviceDataPoint datapoint = new DeviceDataPoint();
+            datapoint.setDeviceId(1L);
+            datapoint.setDatapointCode("TEMP-01");
+            when(deviceDataPointMapper.selectList(any())).thenReturn(List.of(datapoint));
 
-        assertThatThrownBy(() -> service.create(1L, datapoint))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("设备不存在");
-    }
+            List<DeviceDataPoint> list = service.listByDeviceId(1L);
 
-    @Test
-    void listByDeviceId_shouldReturnList() {
-        DeviceDataPoint datapoint = new DeviceDataPoint();
-        datapoint.setDeviceId(1L);
-        datapoint.setDatapointCode("TEMP-01");
-        when(deviceDataPointMapper.selectList(any())).thenReturn(List.of(datapoint));
-
-        List<DeviceDataPoint> list = service.listByDeviceId(1L);
-
-        assertThat(list).hasSize(1);
-        assertThat(list.get(0).getDatapointCode()).isEqualTo("TEMP-01");
+            assertThat(list).hasSize(1);
+            assertThat(list.get(0).getDatapointCode()).isEqualTo("TEMP-01");
+        }
     }
 }

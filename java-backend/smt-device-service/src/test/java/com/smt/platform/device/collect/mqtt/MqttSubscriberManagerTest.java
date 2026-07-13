@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -20,9 +22,6 @@ import static org.mockito.Mockito.when;
 
 /**
  * MqttSubscriberManager 单元测试。
- *
- * <p>用 Mockito mock {@link MqttClient}，不依赖真实 MQTT broker。
- * 验证 subscribe 回调路径（消息到达 -> 回调触发）与 payload 解析逻辑。</p>
  */
 class MqttSubscriberManagerTest {
 
@@ -37,135 +36,164 @@ class MqttSubscriberManagerTest {
         manager.setClient(mockClient);
     }
 
-    // ---------------- subscribe 回调路径 ----------------
+    @Nested
+    @DisplayName("subscribe")
+    class SubscribeTest {
 
-    @Test
-    void subscribe_shouldInvokeClientSubscribe() throws Exception {
-        @SuppressWarnings("unchecked")
-        BiConsumer<String, String> callback = mock(BiConsumer.class);
+        @Test
+        @DisplayName("should invoke client subscribe when default")
+        void shouldInvokeClientSubscribe_whenDefault() throws Exception {
+            @SuppressWarnings("unchecked")
+            BiConsumer<String, String> callback = mock(BiConsumer.class);
 
-        manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
+            manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
 
-        verify(mockClient).subscribe("smt/device/1/temperature", 1);
+            verify(mockClient).subscribe("smt/device/1/temperature", 1);
+        }
+
+        @Test
+        @DisplayName("should skip when topic is empty")
+        void shouldSkip_whenEmptyTopic() {
+            @SuppressWarnings("unchecked")
+            BiConsumer<String, String> callback = mock(BiConsumer.class);
+
+            manager.subscribe("", 1L, "temperature", callback);
+
+            verifyNoInteractions(callback);
+        }
     }
 
-    @Test
-    void subscribe_emptyTopicShouldSkip() {
-        @SuppressWarnings("unchecked")
-        BiConsumer<String, String> callback = mock(BiConsumer.class);
+    @Nested
+    @DisplayName("handleMessage")
+    class HandleMessageTest {
 
-        manager.subscribe("", 1L, "temperature", callback);
+        @Test
+        @DisplayName("should route by topic and pass original payload when subscribed")
+        void shouldRouteByTopicAndPassOriginalPayload_whenSubscribed() {
+            @SuppressWarnings("unchecked")
+            BiConsumer<String, String> callback = mock(BiConsumer.class);
+            manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
 
-        verifyNoInteractions(callback);
+            String payload = "{\"value\":\"75.5\",\"timestamp\":\"2026-06-27T10:00:00\"}";
+            MqttMessage message = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
+            manager.handleMessage("smt/device/1/temperature", message);
+
+            verify(callback).accept("temperature", payload);
+        }
+
+        @Test
+        @DisplayName("should ignore when topic is not subscribed")
+        void shouldIgnore_whenUnsubscribedTopic() {
+            @SuppressWarnings("unchecked")
+            BiConsumer<String, String> callback = mock(BiConsumer.class);
+            manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
+
+            MqttMessage message = new MqttMessage("test".getBytes(StandardCharsets.UTF_8));
+            manager.handleMessage("smt/device/1/unknown", message);
+
+            verifyNoInteractions(callback);
+        }
+
+        @Test
+        @DisplayName("should not propagate when callback throws exception")
+        void shouldNotPropagate_whenCallbackThrowsException() {
+            @SuppressWarnings("unchecked")
+            BiConsumer<String, String> callback = (code, payload) -> {
+                throw new RuntimeException("模拟回调异常");
+            };
+            manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
+
+            MqttMessage message = new MqttMessage("test".getBytes(StandardCharsets.UTF_8));
+            manager.handleMessage("smt/device/1/temperature", message);
+        }
     }
 
-    @Test
-    void handleMessage_shouldRouteByTopicAndPassOriginalPayload() {
-        @SuppressWarnings("unchecked")
-        BiConsumer<String, String> callback = mock(BiConsumer.class);
-        manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
+    @Nested
+    @DisplayName("publish")
+    class PublishTest {
 
-        String payload = "{\"value\":\"75.5\",\"timestamp\":\"2026-06-27T10:00:00\"}";
-        MqttMessage message = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
-        manager.handleMessage("smt/device/1/temperature", message);
+        @Test
+        @DisplayName("should invoke client publish when default")
+        void shouldInvokeClientPublish_whenDefault() throws Exception {
+            manager.publish("smt/device/1/temperature", "{\"value\":\"80\"}");
 
-        verify(callback).accept("temperature", payload);
+            verify(mockClient).publish(eq("smt/device/1/temperature"), any(MqttMessage.class));
+        }
+
+        @Test
+        @DisplayName("should skip when topic or payload is empty")
+        void shouldSkip_whenEmptyTopicOrPayload() throws Exception {
+            manager.publish("", "payload");
+            manager.publish("smt/device/1/temperature", null);
+
+            verify(mockClient, org.mockito.Mockito.never())
+                    .publish(any(String.class), any(MqttMessage.class));
+        }
     }
 
-    @Test
-    void handleMessage_unsubscribedTopicShouldBeIgnored() {
-        @SuppressWarnings("unchecked")
-        BiConsumer<String, String> callback = mock(BiConsumer.class);
-        manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
+    @Nested
+    @DisplayName("parsePayload")
+    class ParsePayloadTest {
 
-        MqttMessage message = new MqttMessage("test".getBytes(StandardCharsets.UTF_8));
-        manager.handleMessage("smt/device/1/unknown", message);
+        @Test
+        @DisplayName("should parse value and timestamp when standard JSON")
+        void shouldParseValueAndTimestamp_whenStandardJson() {
+            MqttSubscriberManager.ParsedPayload parsed =
+                    manager.parsePayload("{\"value\":\"75.5\",\"timestamp\":\"2026-06-27T10:00:00\"}");
 
-        verifyNoInteractions(callback);
-    }
+            assertThat(parsed.value).isEqualTo("75.5");
+            assertThat(parsed.timestamp).isEqualTo(LocalDateTime.of(2026, 6, 27, 10, 0, 0));
+        }
 
-    @Test
-    void handleMessage_callbackExceptionShouldNotPropagate() {
-        @SuppressWarnings("unchecked")
-        BiConsumer<String, String> callback = (code, payload) -> {
-            throw new RuntimeException("模拟回调异常");
-        };
-        manager.subscribe("smt/device/1/temperature", 1L, "temperature", callback);
+        @Test
+        @DisplayName("should convert numeric value to string when default")
+        void shouldConvertNumericValueToString_whenDefault() {
+            MqttSubscriberManager.ParsedPayload parsed =
+                    manager.parsePayload("{\"value\":75.5,\"timestamp\":\"2026-06-27T10:00:00\"}");
 
-        MqttMessage message = new MqttMessage("test".getBytes(StandardCharsets.UTF_8));
-        // 不应抛出异常
-        manager.handleMessage("smt/device/1/temperature", message);
-    }
+            assertThat(parsed.value).isEqualTo("75.5");
+        }
 
-    @Test
-    void publish_shouldInvokeClientPublish() throws Exception {
-        manager.publish("smt/device/1/temperature", "{\"value\":\"80\"}");
+        @Test
+        @DisplayName("should use as value with current time when plain text")
+        void shouldUseAsValueWithCurrentTime_whenPlainText() {
+            MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("hello");
 
-        verify(mockClient).publish(eq("smt/device/1/temperature"), any(MqttMessage.class));
-    }
+            assertThat(parsed.value).isEqualTo("hello");
+            assertThat(parsed.timestamp).isNotNull();
+        }
 
-    @Test
-    void publish_emptyTopicOrPayloadShouldSkip() throws Exception {
-        manager.publish("", "payload");
-        manager.publish("smt/device/1/temperature", null);
+        @Test
+        @DisplayName("should return empty value when payload is empty")
+        void shouldReturnEmptyValue_whenPayloadIsEmpty() {
+            MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("");
 
-        verify(mockClient, org.mockito.Mockito.never())
-                .publish(any(String.class), any(MqttMessage.class));
-    }
+            assertThat(parsed.value).isEmpty();
+        }
 
-    // ---------------- parsePayload 解析逻辑 ----------------
+        @Test
+        @DisplayName("should return empty value when payload is null")
+        void shouldReturnEmptyValue_whenPayloadIsNull() {
+            MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload(null);
 
-    @Test
-    void parsePayload_standardJsonShouldParseValueAndTimestamp() {
-        MqttSubscriberManager.ParsedPayload parsed =
-                manager.parsePayload("{\"value\":\"75.5\",\"timestamp\":\"2026-06-27T10:00:00\"}");
+            assertThat(parsed.value).isEmpty();
+        }
 
-        assertThat(parsed.value).isEqualTo("75.5");
-        assertThat(parsed.timestamp).isEqualTo(LocalDateTime.of(2026, 6, 27, 10, 0, 0));
-    }
+        @Test
+        @DisplayName("should use current time when timestamp is missing")
+        void shouldUseCurrentTime_whenTimestampIsMissing() {
+            MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("{\"value\":\"42\"}");
 
-    @Test
-    void parsePayload_numericValueShouldBeConvertedToString() {
-        MqttSubscriberManager.ParsedPayload parsed =
-                manager.parsePayload("{\"value\":75.5,\"timestamp\":\"2026-06-27T10:00:00\"}");
+            assertThat(parsed.value).isEqualTo("42");
+            assertThat(parsed.timestamp).isNotNull();
+        }
 
-        assertThat(parsed.value).isEqualTo("75.5");
-    }
+        @Test
+        @DisplayName("should treat as plain text when JSON is invalid")
+        void shouldTreatAsPlainText_whenJsonIsInvalid() {
+            MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("{broken");
 
-    @Test
-    void parsePayload_plainTextShouldBeUsedAsValueWithCurrentTime() {
-        MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("hello");
-
-        assertThat(parsed.value).isEqualTo("hello");
-        assertThat(parsed.timestamp).isNotNull();
-    }
-
-    @Test
-    void parsePayload_emptyPayloadShouldReturnEmptyValue() {
-        MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("");
-
-        assertThat(parsed.value).isEmpty();
-    }
-
-    @Test
-    void parsePayload_nullPayloadShouldReturnEmptyValue() {
-        MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload(null);
-
-        assertThat(parsed.value).isEmpty();
-    }
-
-    @Test
-    void parsePayload_missingTimestampShouldUseCurrentTime() {
-        MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("{\"value\":\"42\"}");
-
-        assertThat(parsed.value).isEqualTo("42");
-        assertThat(parsed.timestamp).isNotNull();
-    }
-
-    @Test
-    void parsePayload_invalidJsonShouldBeTreatedAsPlainText() {
-        MqttSubscriberManager.ParsedPayload parsed = manager.parsePayload("{broken");
-
-        assertThat(parsed.value).isEqualTo("{broken");
+            assertThat(parsed.value).isEqualTo("{broken");
+        }
     }
 }

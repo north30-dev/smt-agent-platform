@@ -7,6 +7,8 @@ import com.smt.platform.device.mapper.DeviceMapper;
 import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.service.impl.DeviceServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -36,141 +38,165 @@ class DeviceServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        // ServiceImpl.baseMapper 为父类声明的泛型字段（运行期擦除为 BaseMapper），
-        // @InjectMocks 字段注入无法可靠注入，这里显式设置。
         ReflectionTestUtils.setField(deviceService, "baseMapper", deviceMapper);
     }
 
-    @Test
-    void create_shouldInsert_whenCodeNotExists() {
-        Device device = new Device();
-        device.setDeviceCode("PRINTER-001");
-        device.setDeviceName("1号线印刷机");
-        when(deviceMapper.selectCount(any())).thenReturn(0L);
-        when(deviceMapper.insert(any(Device.class))).thenReturn(1);
+    @Nested
+    @DisplayName("create")
+    class CreateTest {
 
-        Device created = deviceService.create(device);
+        @Test
+        @DisplayName("should insert device when code does not exist")
+        void shouldInsert_whenCodeNotExists() {
+            Device device = new Device();
+            device.setDeviceCode("PRINTER-001");
+            device.setDeviceName("1号线印刷机");
+            when(deviceMapper.selectCount(any())).thenReturn(0L);
+            when(deviceMapper.insert(any(Device.class))).thenReturn(1);
 
-        assertThat(created.getDeviceCode()).isEqualTo("PRINTER-001");
-        assertThat(created.getStatus()).isEqualTo("RUNNING");
-        assertThat(created.getHealthScore()).isEqualTo(100);
-        // M5：deleted/createTime 由 MetaObjectHandler 在 insert 时自动填充，
-        // 单测环境（mocked mapper）不触发 MetaObjectHandler，故不断言这两个字段；
-        // 其填充行为由集成测试（含真实 DB + MetaObjectHandler）覆盖。
-        verify(deviceMapper).insert(any(Device.class));
+            Device created = deviceService.create(device);
+
+            assertThat(created.getDeviceCode()).isEqualTo("PRINTER-001");
+            assertThat(created.getStatus()).isEqualTo("RUNNING");
+            assertThat(created.getHealthScore()).isEqualTo(100);
+            verify(deviceMapper).insert(any(Device.class));
+        }
+
+        @Test
+        @DisplayName("should throw BizException when code already exists")
+        void shouldThrowBizException_whenCodeExists() {
+            Device device = new Device();
+            device.setDeviceCode("PRINTER-001");
+            when(deviceMapper.selectCount(any())).thenReturn(1L);
+
+            assertThatThrownBy(() -> deviceService.create(device))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("设备编码已存在");
+        }
     }
 
-    @Test
-    void create_shouldThrow_whenCodeExists() {
-        Device device = new Device();
-        device.setDeviceCode("PRINTER-001");
-        when(deviceMapper.selectCount(any())).thenReturn(1L);
+    @Nested
+    @DisplayName("pageList")
+    class PageListTest {
 
-        assertThatThrownBy(() -> deviceService.create(device))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("设备编码已存在");
+        @Test
+        @DisplayName("should return page when default")
+        void shouldReturnPage_whenDefault() {
+            Page<Device> page = new Page<>(1, 10);
+            Device device = new Device();
+            device.setId(1L);
+            page.setRecords(List.of(device));
+            page.setTotal(1L);
+            when(deviceMapper.selectPage(any(), any())).thenReturn(page);
+
+            IPage<Device> result = deviceService.pageList(1, 10, null, null, null);
+
+            assertThat(result.getRecords()).hasSize(1);
+            assertThat(result.getTotal()).isEqualTo(1L);
+        }
     }
 
-    @Test
-    void pageList_shouldReturnPage() {
-        Page<Device> page = new Page<>(1, 10);
-        Device device = new Device();
-        device.setId(1L);
-        page.setRecords(List.of(device));
-        page.setTotal(1L);
-        when(deviceMapper.selectPage(any(), any())).thenReturn(page);
+    @Nested
+    @DisplayName("delete")
+    class DeleteTest {
 
-        IPage<Device> result = deviceService.pageList(1, 10, null, null, null);
+        @Test
+        @DisplayName("should soft delete when device exists")
+        void shouldSoftDelete_whenExists() {
+            Device existing = new Device();
+            existing.setId(1L);
+            when(deviceMapper.selectById(1L)).thenReturn(existing);
+            when(deviceMapper.deleteById(1L)).thenReturn(1);
 
-        assertThat(result.getRecords()).hasSize(1);
-        assertThat(result.getTotal()).isEqualTo(1L);
+            boolean ok = deviceService.delete(1L);
+
+            assertThat(ok).isTrue();
+            verify(deviceMapper).deleteById(1L);
+        }
+
+        @Test
+        @DisplayName("should throw BizException when device does not exist")
+        void shouldThrowBizException_whenNotExists() {
+            when(deviceMapper.selectById(1L)).thenReturn(null);
+
+            assertThatThrownBy(() -> deviceService.delete(1L))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("设备不存在");
+        }
     }
 
-    @Test
-    void delete_shouldSoftDelete_whenExists() {
-        Device existing = new Device();
-        existing.setId(1L);
-        when(deviceMapper.selectById(1L)).thenReturn(existing);
-        when(deviceMapper.deleteById(1L)).thenReturn(1);
+    @Nested
+    @DisplayName("update")
+    class UpdateTest {
 
-        boolean ok = deviceService.delete(1L);
+        @Test
+        @DisplayName("should update fields when device exists")
+        void shouldUpdateFields_whenExists() {
+            Device existing = new Device();
+            existing.setId(1L);
+            existing.setDeviceCode("PRINTER-001");
+            existing.setDeviceName("旧名称");
+            existing.setDeviceType("PRINTER");
+            existing.setStatus("RUNNING");
+            existing.setHealthScore(100);
+            when(deviceMapper.selectById(1L)).thenReturn(existing);
 
-        assertThat(ok).isTrue();
-        verify(deviceMapper).deleteById(1L);
+            Device patch = new Device();
+            patch.setDeviceName("新名称");
+            patch.setStatus("STOPPED");
+            when(deviceMapper.updateById(any(Device.class))).thenReturn(1);
+
+            Device updated = deviceService.update(1L, patch);
+
+            assertThat(updated.getDeviceName()).isEqualTo("新名称");
+            assertThat(updated.getStatus()).isEqualTo("STOPPED");
+            assertThat(updated.getDeviceCode()).isEqualTo("PRINTER-001");
+            assertThat(updated.getDeviceType()).isEqualTo("PRINTER");
+            assertThat(updated.getHealthScore()).isEqualTo(100);
+            verify(deviceMapper).updateById(any(Device.class));
+        }
+
+        @Test
+        @DisplayName("should throw BizException when device does not exist")
+        void shouldThrowBizException_whenNotExists() {
+            when(deviceMapper.selectById(1L)).thenReturn(null);
+
+            Device patch = new Device();
+            patch.setDeviceName("新名称");
+
+            assertThatThrownBy(() -> deviceService.update(1L, patch))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("设备不存在");
+        }
     }
 
-    @Test
-    void delete_shouldThrow_whenNotExists() {
-        when(deviceMapper.selectById(1L)).thenReturn(null);
+    @Nested
+    @DisplayName("getByIdOrThrow")
+    class GetByIdOrThrowTest {
 
-        assertThatThrownBy(() -> deviceService.delete(1L))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("设备不存在");
-    }
+        @Test
+        @DisplayName("should return device when device exists")
+        void shouldReturnDevice_whenExists() {
+            Device device = new Device();
+            device.setId(1L);
+            device.setDeviceCode("PRINTER-001");
+            when(deviceMapper.selectById(1L)).thenReturn(device);
 
-    // -------- M8 补充：update + getByIdOrThrow --------
+            Device result = deviceService.getByIdOrThrow(1L);
 
-    @Test
-    void update_shouldUpdateFields_whenExists() {
-        Device existing = new Device();
-        existing.setId(1L);
-        existing.setDeviceCode("PRINTER-001");
-        existing.setDeviceName("旧名称");
-        existing.setDeviceType("PRINTER");
-        existing.setStatus("RUNNING");
-        existing.setHealthScore(100);
-        when(deviceMapper.selectById(1L)).thenReturn(existing);
+            assertThat(result).isNotNull();
+            assertThat(result.getId()).isEqualTo(1L);
+            assertThat(result.getDeviceCode()).isEqualTo("PRINTER-001");
+        }
 
-        Device patch = new Device();
-        patch.setDeviceName("新名称");
-        patch.setStatus("STOPPED");
-        when(deviceMapper.updateById(any(Device.class))).thenReturn(1);
+        @Test
+        @DisplayName("should throw BizException when device does not exist")
+        void shouldThrowBizException_whenNotExists() {
+            when(deviceMapper.selectById(1L)).thenReturn(null);
 
-        Device updated = deviceService.update(1L, patch);
-
-        assertThat(updated.getDeviceName()).isEqualTo("新名称");
-        assertThat(updated.getStatus()).isEqualTo("STOPPED");
-        // 未传字段保持原值
-        assertThat(updated.getDeviceCode()).isEqualTo("PRINTER-001");
-        assertThat(updated.getDeviceType()).isEqualTo("PRINTER");
-        assertThat(updated.getHealthScore()).isEqualTo(100);
-        // M5：updateTime 由 MetaObjectHandler 在 updateById 时自动填充，
-        // 单测环境（mocked mapper）不触发 MetaObjectHandler，故不断言该字段。
-        verify(deviceMapper).updateById(any(Device.class));
-    }
-
-    @Test
-    void update_shouldThrow_whenNotExists() {
-        when(deviceMapper.selectById(1L)).thenReturn(null);
-
-        Device patch = new Device();
-        patch.setDeviceName("新名称");
-
-        assertThatThrownBy(() -> deviceService.update(1L, patch))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("设备不存在");
-    }
-
-    @Test
-    void getByIdOrThrow_shouldReturnDevice_whenExists() {
-        Device device = new Device();
-        device.setId(1L);
-        device.setDeviceCode("PRINTER-001");
-        when(deviceMapper.selectById(1L)).thenReturn(device);
-
-        Device result = deviceService.getByIdOrThrow(1L);
-
-        assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo(1L);
-        assertThat(result.getDeviceCode()).isEqualTo("PRINTER-001");
-    }
-
-    @Test
-    void getByIdOrThrow_shouldThrow_whenNotExists() {
-        when(deviceMapper.selectById(1L)).thenReturn(null);
-
-        assertThatThrownBy(() -> deviceService.getByIdOrThrow(1L))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("设备不存在");
+            assertThatThrownBy(() -> deviceService.getByIdOrThrow(1L))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("设备不存在");
+        }
     }
 }

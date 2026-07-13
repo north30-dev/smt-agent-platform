@@ -10,6 +10,8 @@ import com.smt.platform.device.model.entity.DeviceData;
 import com.smt.platform.device.repository.InfluxDBRepository;
 import com.smt.platform.device.service.impl.DeviceDataServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -49,54 +51,66 @@ class DeviceDataServiceImplTest {
         ReflectionTestUtils.setField(service, "baseMapper", deviceDataMapper);
     }
 
-    @Test
-    void saveData_shouldInsert() {
-        when(deviceDataMapper.insert(any(DeviceData.class))).thenReturn(1);
+    @Nested
+    @DisplayName("saveData")
+    class SaveDataTest {
 
-        LocalDateTime ts = LocalDateTime.now();
-        service.saveData(1L, "TEMP-01", "42.5", ts);
+        @Test
+        @DisplayName("should insert data when default")
+        void shouldInsert_whenDefault() {
+            when(deviceDataMapper.insert(any(DeviceData.class))).thenReturn(1);
 
-        verify(deviceDataMapper).insert(any(DeviceData.class));
-        // Batch 4：验证 InfluxDB 双写调用
-        verify(influxDBRepository).writeDeviceData(1L, "TEMP-01", "42.5", ts);
+            LocalDateTime ts = LocalDateTime.now();
+            service.saveData(1L, "TEMP-01", "42.5", ts);
+
+            verify(deviceDataMapper).insert(any(DeviceData.class));
+            verify(influxDBRepository).writeDeviceData(1L, "TEMP-01", "42.5", ts);
+        }
     }
 
-    @Test
-    void queryHistory_shouldReturnPage_whenDeviceExists() {
-        Device existing = new Device();
-        existing.setId(1L);
-        when(deviceMapper.selectById(1L)).thenReturn(existing);
-        Page<DeviceData> page = new Page<>(1, 100);
-        page.setRecords(List.of(new DeviceData()));
-        page.setTotal(1L);
-        when(deviceDataMapper.selectPage(any(), any())).thenReturn(page);
+    @Nested
+    @DisplayName("queryHistory")
+    class QueryHistoryTest {
 
-        IPage<DeviceData> result = service.queryHistory(1L, "TEMP-01",
-                LocalDateTime.of(2026, 6, 27, 0, 0),
-                LocalDateTime.of(2026, 6, 27, 23, 59), 1, 100);
+        @Test
+        @DisplayName("should return page when device exists")
+        void shouldReturnPage_whenDeviceExists() {
+            Device existing = new Device();
+            existing.setId(1L);
+            when(deviceMapper.selectById(1L)).thenReturn(existing);
+            Page<DeviceData> page = new Page<>(1, 100);
+            page.setRecords(List.of(new DeviceData()));
+            page.setTotal(1L);
+            when(deviceDataMapper.selectPage(any(), any())).thenReturn(page);
 
-        assertThat(result.getRecords()).hasSize(1);
-        assertThat(result.getTotal()).isEqualTo(1L);
-    }
+            IPage<DeviceData> result = service.queryHistory(1L, "TEMP-01",
+                    LocalDateTime.of(2026, 6, 27, 0, 0),
+                    LocalDateTime.of(2026, 6, 27, 23, 59), 1, 100);
 
-    @Test
-    void queryHistory_shouldThrow_whenDeviceNotExists() {
-        when(deviceMapper.selectById(1L)).thenReturn(null);
+            assertThat(result.getRecords()).hasSize(1);
+            assertThat(result.getTotal()).isEqualTo(1L);
+        }
 
-        assertThatThrownBy(() -> service.queryHistory(1L, "TEMP-01",
-                LocalDateTime.of(2026, 6, 27, 0, 0),
-                LocalDateTime.of(2026, 6, 27, 23, 59), 1, 100))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("设备不存在");
-    }
+        @Test
+        @DisplayName("should throw BizException when device does not exist")
+        void shouldThrowBizException_whenDeviceNotExists() {
+            when(deviceMapper.selectById(1L)).thenReturn(null);
 
-    @Test
-    void queryHistory_shouldThrow_whenTimeInverted() {
-        // 时间倒置校验先于设备存在性校验，故不 stub deviceMapper
-        assertThatThrownBy(() -> service.queryHistory(1L, "TEMP-01",
-                LocalDateTime.of(2026, 6, 27, 23, 59),
-                LocalDateTime.of(2026, 6, 27, 0, 0), 1, 100))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("起始时间不能晚于结束时间");
+            assertThatThrownBy(() -> service.queryHistory(1L, "TEMP-01",
+                    LocalDateTime.of(2026, 6, 27, 0, 0),
+                    LocalDateTime.of(2026, 6, 27, 23, 59), 1, 100))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("设备不存在");
+        }
+
+        @Test
+        @DisplayName("should throw BizException when time is inverted")
+        void shouldThrowBizException_whenTimeInverted() {
+            assertThatThrownBy(() -> service.queryHistory(1L, "TEMP-01",
+                    LocalDateTime.of(2026, 6, 27, 23, 59),
+                    LocalDateTime.of(2026, 6, 27, 0, 0), 1, 100))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("起始时间不能晚于结束时间");
+        }
     }
 }
