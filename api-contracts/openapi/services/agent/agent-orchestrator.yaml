@@ -1,0 +1,373 @@
+openapi: 3.0.3
+info:
+  title: SMT 编排智能体 Agent REST API
+  description: |
+    agent-orchestrator 多 Agent 协同编排接口契约。覆盖设备故障协同处理（同步+事件驱动）、工作流状态查询。
+
+    外部路径前缀 /api/agent/v1/orchestrator/** 经 smt-gateway StripPrefix=2 路由到 agent-orchestrator (8005)。
+    响应体业务对象直返，字段 snake_case。
+  version: 1.0.0
+  contact:
+    name: smt-agent-platform
+    url: https://github.com/north30/smt-agent-platform
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: 本地开发环境（经 smt-gateway 网关）
+tags:
+  - name: 编排智能体
+    description: agent-orchestrator 编排智能体 Agent 相关接口
+paths:
+  /api/agent/v1/orchestrator/device_fault:
+    post:
+      tags:
+        - 编排智能体
+      summary: 设备故障协同处理
+      description: |
+        基于 LangGraph StateGraph 编排的多 Agent 协同处理入口。
+        依次调用 maintenance/quality/scheduler 三个 Agent：
+        1. maintenance Agent /diagnose 生成根因与维修建议
+        2. quality Agent /root_cause 评估是否影响质量
+        3. scheduler Agent /urgent 生成排产调整方案
+        子 Agent 不可达时降级（写入 state.errors），不阻断整体工作流。
+      operationId: orchestrateDeviceFault
+      requestBody:
+        required: true
+        description: 设备故障协同处理请求体
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrchestratorDeviceFaultRequest'
+            examples:
+              fault:
+                summary: 设备故障协同示例
+                value:
+                  device_id: 1001
+                  symptom: X 轴异响
+      responses:
+        '200':
+          description: 协同处理完成（含降级场景）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorWorkflowResponse'
+              examples:
+                success:
+                  summary: 协同成功示例
+                  value:
+                    workflow_id: wf-2026-0001
+                    status: SUCCESS
+                    diagnosis:
+                      root_causes:
+                        - X 轴导轨润滑不足
+                      repair_suggestions:
+                        - 立即补充 X 轴导轨润滑油
+                      similar_cases: []
+                    quality_assessment:
+                      root_causes:
+                        - category: 机
+                          cause: X 轴定位精度下降导致贴片偏移
+                      corrective_actions:
+                        - 校准 X 轴定位精度后复测首件
+                      similar_cases: []
+                    schedule_adjustment:
+                      urgent_order_no: URGENT-2026-0001
+                      affected_orders:
+                        - order_no: ORD-2026-0001
+                          product_model: PCBA-A
+                          delay_hours: 2.0
+                      estimated_delay_hours: 2.0
+                      adjustment_plan:
+                        changeover_suggestion: 建议暂停设备 1001 排产 2 小时
+                        overtime_suggestion: 安排 2 小时加班补足延误
+                    summary: 设备 1001 X 轴异响由导轨润滑不足引起，已建议立即补油；质量侧可能产生贴片偏移；调度侧建议暂停排产 2 小时并安排加班。
+                    errors: {}
+        '400':
+          description: 参数错误（device_id 缺失或 symptom 为空）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                emptySymptom:
+                  summary: 故障现象为空
+                  value:
+                    error: INVALID_SYMPTOM
+                    message: 故障现象不能为空
+        '500':
+          description: 编排流程内部异常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                internal:
+                  summary: 编排内部异常
+                  value:
+                    error: ORCHESTRATION_FAILED
+                    message: 编排流程执行失败
+  /api/agent/v1/orchestrator/device_fault_event:
+    post:
+      tags:
+        - 编排智能体
+      summary: 设备故障事件驱动入口
+      description: |
+        事件驱动的设备故障协同处理入口。接收设备故障事件（含设备 ID、故障现象、来源），
+        触发与 /device_fault 相同的多 Agent 协同流程（maintenance → quality → scheduler → execution），
+        并由 execution Agent 自动生成处置指令。响应结构与 device_fault 一致（WorkflowResponse）。
+      operationId: orchestrateDeviceFaultEvent
+      requestBody:
+        required: true
+        description: 设备故障事件请求体
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrchestratorDeviceFaultEventRequest'
+            examples:
+              event:
+                summary: 设备故障事件示例
+                value:
+                  device_id: 1001
+                  symptom: X 轴异响
+                  source: device_alert
+      responses:
+        '200':
+          description: 协同处理完成（含降级场景）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorWorkflowResponse'
+              examples:
+                success:
+                  summary: 协同成功示例
+                  value:
+                    workflow_id: wf-2026-0002
+                    status: SUCCESS
+                    diagnosis:
+                      root_causes:
+                        - X 轴导轨润滑不足
+                      repair_suggestions:
+                        - 立即补充 X 轴导轨润滑油
+                      similar_cases: []
+                    quality_assessment:
+                      root_causes:
+                        - category: 机
+                          cause: X 轴定位精度下降导致贴片偏移
+                      corrective_actions:
+                        - 校准 X 轴定位精度后复测首件
+                      similar_cases: []
+                    schedule_adjustment:
+                      urgent_order_no: URGENT-2026-0001
+                      affected_orders:
+                        - order_no: ORD-2026-0001
+                          product_model: PCBA-A
+                          delay_hours: 2.0
+                      estimated_delay_hours: 2.0
+                      adjustment_plan:
+                        changeover_suggestion: 建议暂停设备 1001 排产 2 小时
+                        overtime_suggestion: 安排 2 小时加班补足延误
+                    summary: 设备 1001 X 轴异响由导轨润滑不足引起，已生成维修指令并调整排产。
+                    errors: {}
+        '400':
+          description: 参数错误（device_id 缺失或 symptom 为空）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                emptySymptom:
+                  summary: 故障现象为空
+                  value:
+                    error: INVALID_SYMPTOM
+                    message: 故障现象不能为空
+        '500':
+          description: 编排流程内部异常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                internal:
+                  summary: 编排内部异常
+                  value:
+                    error: ORCHESTRATION_FAILED
+                    message: 编排流程执行失败
+  /api/agent/v1/orchestrator/workflows/{workflow_id}:
+    get:
+      tags:
+        - 编排智能体
+      summary: 查询工作流状态
+      description: |
+        根据工作流 ID 查询协同任务的当前状态与中间结果。
+        工作流状态可能为 SUCCESS/PARTIAL/FAILED；中间结果含各子 Agent 输出。
+      operationId: getOrchestratorWorkflow
+      parameters:
+        - name: workflow_id
+          in: path
+          description: 工作流 ID
+          required: true
+          schema:
+            type: string
+            example: wf-2026-0001
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorWorkflowResponse'
+              examples:
+                workflow:
+                  summary: 工作流查询示例
+                  value:
+                    workflow_id: wf-2026-0001
+                    status: SUCCESS
+                    diagnosis:
+                      root_causes:
+                        - X 轴导轨润滑不足
+                      repair_suggestions:
+                        - 立即补充 X 轴导轨润滑油
+                      similar_cases: []
+                    quality_assessment:
+                      root_causes:
+                        - category: 机
+                          cause: X 轴定位精度下降导致贴片偏移
+                      corrective_actions:
+                        - 校准 X 轴定位精度后复测首件
+                      similar_cases: []
+                    schedule_adjustment:
+                      urgent_order_no: URGENT-2026-0001
+                      affected_orders:
+                        - order_no: ORD-2026-0001
+                          product_model: PCBA-A
+                          delay_hours: 2.0
+                      estimated_delay_hours: 2.0
+                      adjustment_plan:
+                        changeover_suggestion: 建议暂停设备 1001 排产 2 小时
+                        overtime_suggestion: 安排 2 小时加班补足延误
+                    summary: 设备 1001 X 轴异响由导轨润滑不足引起，已建议立即补油；质量侧可能产生贴片偏移；调度侧建议暂停排产 2 小时并安排加班。
+                    errors: {}
+        '404':
+          description: 工作流 ID 不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: 工作流不存在
+                  value:
+                    error: WORKFLOW_NOT_FOUND
+                    message: 工作流 ID 不存在
+components:
+  schemas:
+    ErrorResponse:
+      $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+    OrchestratorDeviceFaultRequest:
+      type: object
+      description: 设备故障协同处理请求体
+      required:
+        - device_id
+        - symptom
+      properties:
+        device_id:
+          type: integer
+          format: int64
+          description: 设备 ID
+          minimum: 1
+          example: 1001
+        symptom:
+          type: string
+          description: 故障现象描述
+          example: X 轴异响
+    OrchestratorDeviceFaultEventRequest:
+      type: object
+      description: 设备故障事件请求体（事件驱动入口）
+      required:
+        - device_id
+        - symptom
+        - source
+      properties:
+        device_id:
+          type: integer
+          format: int64
+          description: 设备 ID
+          minimum: 1
+          example: 1001
+        symptom:
+          type: string
+          description: 故障现象描述
+          example: X 轴异响
+        source:
+          type: string
+          description: 事件来源（如 device_alert、manual_report、scheduled_check）
+          example: device_alert
+    OrchestratorWorkflowResponse:
+      type: object
+      description: 工作流协同响应
+      required:
+        - workflow_id
+        - status
+        - errors
+      properties:
+        workflow_id:
+          type: string
+          description: 工作流 ID
+          example: wf-2026-0001
+        status:
+          type: string
+          description: 工作流状态
+          enum:
+            - SUCCESS
+            - PARTIAL
+            - FAILED
+          example: SUCCESS
+        diagnosis:
+          type: object
+          description: maintenance Agent 诊断结果（不可达时为 null）
+          nullable: true
+          additionalProperties: true
+          example:
+            root_causes:
+              - X 轴导轨润滑不足
+            repair_suggestions:
+              - 立即补充 X 轴导轨润滑油
+            similar_cases: []
+        quality_assessment:
+          type: object
+          description: quality Agent 评估结果（不可达时为 null 或降级对象）
+          nullable: true
+          additionalProperties: true
+          example:
+            root_causes:
+              - category: 机
+                cause: X 轴定位精度下降导致贴片偏移
+            corrective_actions:
+              - 校准 X 轴定位精度后复测首件
+            similar_cases: []
+        schedule_adjustment:
+          type: object
+          description: scheduler Agent 调整方案（不可达时为 null）
+          nullable: true
+          additionalProperties: true
+          example:
+            urgent_order_no: URGENT-2026-0001
+            affected_orders:
+              - order_no: ORD-2026-0001
+                product_model: PCBA-A
+                delay_hours: 2.0
+            estimated_delay_hours: 2.0
+            adjustment_plan:
+              changeover_suggestion: 建议暂停设备 1001 排产 2 小时
+              overtime_suggestion: 安排 2 小时加班补足延误
+        summary:
+          type: string
+          description: 工作流总结（LLM 生成，可能为 null）
+          nullable: true
+          example: 设备 1001 X 轴异响由导轨润滑不足引起，已建议立即补油；质量侧可能产生贴片偏移；调度侧建议暂停排产 2 小时并安排加班。
+        errors:
+          type: object
+          description: 各节点错误信息（key 为节点名，value 为错误描述；正常时为空对象）
+          additionalProperties: true
+          example: {}

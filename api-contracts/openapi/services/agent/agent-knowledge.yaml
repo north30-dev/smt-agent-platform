@@ -1,0 +1,354 @@
+openapi: 3.0.3
+info:
+  title: SMT 知识助手 Agent REST API
+  description: |
+    agent-knowledge 知识助手 Agent 接口契约。覆盖文档上传、向量检索问答、文档列表与删除。
+    外部路径前缀 /api/agent/v1/knowledge/** 经 smt-gateway StripPrefix=2 路由到 agent-knowledge (8004)。
+    响应体业务对象直返，字段 snake_case。
+  version: 1.0.0
+  contact:
+    name: smt-agent-platform
+    url: https://github.com/north30/smt-agent-platform
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: 本地开发环境（经 smt-gateway 网关）
+tags:
+  - name: 知识助手
+    description: agent-knowledge 知识助手 RAG 问答相关接口
+paths:
+  /api/agent/v1/knowledge/upload:
+    post:
+      tags:
+        - 知识助手
+      summary: 上传知识文档
+      description: |
+        以 multipart/form-data 方式上传文档（PDF/Word/TXT/Markdown 等），服务端完成解析、分块、向量化后写入 Milvus。
+        返回新文档的 ID、名称与分块数量。
+      operationId: uploadKnowledgeDocument
+      requestBody:
+        required: true
+        description: 待上传的文档文件
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/KnowledgeUploadRequest'
+      responses:
+        '200':
+          description: 上传并入库成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeUploadResponse'
+              examples:
+                success:
+                  summary: 上传成功
+                  value:
+                    doc_id: doc-2026-0001
+                    doc_name: SMT印刷机维护手册.pdf
+                    chunk_count: 42
+        '400':
+          description: 参数错误（文件为空、格式不支持、文件过大等）
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                emptyFile:
+                  summary: 文件为空
+                  value:
+                    error: INVALID_FILE
+                    message: 上传文件不能为空
+        '503':
+          description: 依赖的向量库服务不可达
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                vectorStoreUnavailable:
+                  summary: 向量库服务不可达
+                  value:
+                    error: VECTOR_STORE_UNAVAILABLE
+                    message: 向量库服务暂不可用
+  /api/agent/v1/knowledge/ask:
+    post:
+      tags:
+        - 知识助手
+      summary: 知识库问答
+      description: |
+        基于已入库文档构建的知识库进行 RAG 检索增强问答：先在 Milvus 中检索与问题最相关的文本块，
+        再交由大模型生成答案，并返回命中的来源片段（含 doc_id、chunk_id、相似度得分、内容片段）。
+      operationId: askKnowledge
+      requestBody:
+        required: true
+        description: 问答请求体
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeAskRequest'
+            examples:
+              printer:
+                summary: 印刷机保养问题
+                value:
+                  question: 印刷机钢网清洁频率应该是多少？
+      responses:
+        '200':
+          description: 问答成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeAskResponse'
+              examples:
+                answer:
+                  summary: 问答示例
+                  value:
+                    answer: 建议每班次生产结束后清洁钢网一次...
+                    sources:
+                      - doc_id: doc-2026-0001
+                        chunk_id: chunk-003
+                        score: 0.92
+                        snippet: 钢网清洁：每班次生产结束后使用专用清洗剂...
+        '400':
+          description: 参数错误（question 为空或超长）
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                emptyQuestion:
+                  summary: 问题为空
+                  value:
+                    error: INVALID_QUESTION
+                    message: 问题不能为空
+        '503':
+          description: 依赖的大模型服务或向量库不可达
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                llmUnavailable:
+                  summary: 大模型服务不可达
+                  value:
+                    error: LLM_UNAVAILABLE
+                    message: 大模型服务暂不可用
+                vectorStoreUnavailable:
+                  summary: 向量库服务不可达
+                  value:
+                    error: VECTOR_STORE_UNAVAILABLE
+                    message: 向量库服务暂不可用
+  /api/agent/v1/knowledge/documents:
+    get:
+      tags:
+        - 知识助手
+      summary: 查询知识库文档列表
+      description: 返回当前知识库中全部已入库文档的元信息列表，按入库时间倒序。
+      operationId: listKnowledgeDocuments
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeDocumentListResponse'
+              examples:
+                list:
+                  summary: 文档列表示例
+                  value:
+                    - doc_id: doc-2026-0001
+                      doc_name: SMT印刷机维护手册.pdf
+                      chunk_count: 42
+                      create_time: '2026-06-27T08:30:00Z'
+        '503':
+          description: 依赖的向量库服务不可达
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                vectorStoreUnavailable:
+                  summary: 向量库服务不可达
+                  value:
+                    error: VECTOR_STORE_UNAVAILABLE
+                    message: 向量库服务暂不可用
+  /api/agent/v1/knowledge/documents/{doc_id}:
+    delete:
+      tags:
+        - 知识助手
+      summary: 删除知识库文档
+      description: |
+        根据文档 ID 删除知识库中的文档及其全部分块向量，返回是否删除成功与实际删除的分块数量。
+      operationId: deleteKnowledgeDocument
+      parameters:
+        - $ref: '../../shared/components.yaml#/components/parameters/DocIdPathParam'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeDeleteResponse'
+              examples:
+                success:
+                  summary: 删除成功
+                  value:
+                    success: true
+                    deleted_chunks: 42
+        '400':
+          description: 参数错误（doc_id 格式不合法）
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                invalidId:
+                  summary: 文档 ID 不合法
+                  value:
+                    error: INVALID_DOC_ID
+                    message: 文档 ID 格式不合法
+        '503':
+          description: 依赖的向量库服务不可达
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                vectorStoreUnavailable:
+                  summary: 向量库服务不可达
+                  value:
+                    error: VECTOR_STORE_UNAVAILABLE
+                    message: 向量库服务暂不可用
+components:
+  schemas:
+    KnowledgeUploadRequest:
+      type: object
+      description: 知识文档上传请求体（multipart/form-data）
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          format: binary
+          description: 待上传的文档文件（支持 PDF/Word/TXT/Markdown）
+    KnowledgeUploadResponse:
+      type: object
+      description: 知识文档上传响应
+      required:
+        - doc_id
+        - doc_name
+        - chunk_count
+      properties:
+        doc_id:
+          type: string
+          description: 文档 ID
+          example: doc-2026-0001
+        doc_name:
+          type: string
+          description: 文档名称
+          example: SMT印刷机维护手册.pdf
+        chunk_count:
+          type: integer
+          description: 分块数量
+          example: 42
+    KnowledgeAskRequest:
+      type: object
+      description: 知识库问答请求体
+      required:
+        - question
+      properties:
+        question:
+          type: string
+          description: 用户问题
+          example: 印刷机钢网清洁频率应该是多少？
+    KnowledgeSource:
+      type: object
+      description: 知识库问答来源片段
+      required:
+        - doc_id
+        - chunk_id
+        - score
+        - snippet
+      properties:
+        doc_id:
+          type: string
+          description: 来源文档 ID
+          example: doc-2026-0001
+        chunk_id:
+          type: string
+          description: 来源分块 ID
+          example: chunk-003
+        score:
+          type: number
+          format: float
+          description: 相似度得分（0-1，越大越相关）
+          minimum: 0
+          maximum: 1
+          example: 0.92
+        snippet:
+          type: string
+          description: 命中文本片段
+          example: 钢网清洁：每班次生产结束后使用专用清洗剂...
+    KnowledgeAskResponse:
+      type: object
+      description: 知识库问答响应
+      required:
+        - answer
+        - sources
+      properties:
+        answer:
+          type: string
+          description: 大模型生成的答案
+          example: 建议每班次生产结束后清洁钢网一次...
+        sources:
+          type: array
+          description: 命中的来源片段列表
+          items:
+            $ref: '#/components/schemas/KnowledgeSource'
+    KnowledgeDocument:
+      type: object
+      description: 知识库文档元信息
+      required:
+        - doc_id
+        - doc_name
+        - chunk_count
+        - create_time
+      properties:
+        doc_id:
+          type: string
+          description: 文档 ID
+          example: doc-2026-0001
+        doc_name:
+          type: string
+          description: 文档名称
+          example: SMT印刷机维护手册.pdf
+        chunk_count:
+          type: integer
+          description: 分块数量
+          example: 42
+        create_time:
+          type: string
+          format: date-time
+          description: 入库时间（ISO-8601）
+          example: '2026-06-27T08:30:00Z'
+    KnowledgeDocumentListResponse:
+      type: array
+      description: 知识库文档列表
+      items:
+        $ref: '#/components/schemas/KnowledgeDocument'
+    KnowledgeDeleteResponse:
+      type: object
+      description: 知识库文档删除响应
+      required:
+        - success
+        - deleted_chunks
+      properties:
+        success:
+          type: boolean
+          description: 是否删除成功
+          example: true
+        deleted_chunks:
+          type: integer
+          description: 实际删除的分块数量
+          example: 42

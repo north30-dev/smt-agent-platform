@@ -1,0 +1,83 @@
+components:
+
+  schemas:
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: 错误码，UPPER_SNAKE_CASE 格式
+        message:
+          type: string
+          description: 错误描述信息
+
+  parameters:
+
+    DeviceIdPathParam:
+      name: device_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      example: 1001
+
+    DocIdPathParam:
+      name: doc_id
+      in: path
+      required: true
+      schema:
+        type: string
+      example: doc-2026-0001
+
+    InstructionIdPathParam:
+      name: instruction_id
+      in: path
+      required: true
+      schema:
+        type: string
+      example: ins-2026-0001
+
+    ExceptionIdPathParam:
+      name: exception_id
+      in: path
+      required: true
+      schema:
+        type: string
+      example: exc-2026-0001
+
+  responses:
+
+    DeviceServiceUnavailable:
+      description: 设备服务不可用
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: DEVICE_SERVICE_UNAVAILABLE
+            message: 设备服务暂时不可用，请稍后重试
+
+    LLMUnavailable:
+      description: 大模型服务不可用
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: LLM_UNAVAILABLE
+            message: 大模型服务暂时不可用，请稍后重试
+
+    VectorStoreUnavailable:
+      description: 向量存储服务不可用
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: VECTOR_STORE_UNAVAILABLE
+            message: 向量存储服务暂时不可用，请稍后重试

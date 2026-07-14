@@ -1,0 +1,451 @@
+openapi: 3.0.3
+info:
+  title: SMT 设备运维 Agent REST API
+  description: |
+    agent-maintenance 设备运维 Agent 接口契约。覆盖健康评分、故障诊断、趋势预测、案例沉淀。
+    外部路径前缀 /api/agent/v1/maintenance/** 经 smt-gateway StripPrefix=2 路由到 agent-maintenance (8002)。
+    响应体业务对象直返，字段 snake_case。
+  version: 1.0.0
+  contact:
+    name: smt-agent-platform
+    url: https://github.com/north30/smt-agent-platform
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: 本地开发环境（经 smt-gateway 网关）
+tags:
+  - name: 设备运维
+    description: agent-maintenance 设备运维 Agent 相关接口
+paths:
+  /api/agent/v1/maintenance/health/{device_id}:
+    get:
+      tags:
+        - 设备运维
+      summary: 设备健康评分
+      description: |
+        根据设备 ID 查询设备健康评分、运行状态、风险等级与运维分析文本。
+        依赖 smt-device-service 提供的设备元信息与历史数据，Java 服务不可达时返回 503。
+      operationId: getDeviceHealth
+      parameters:
+        - $ref: '../../shared/components.yaml#/components/parameters/DeviceIdPathParam'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceHealthResponse'
+              examples:
+                health:
+                  summary: 健康评分示例
+                  value:
+                    device_id: 1001
+                    health_score: 88
+                    status: RUNNING
+                    risk_level: LOW
+                    analysis: 设备运行平稳，温度与振动指标均在阈值范围内。
+        '400':
+          description: 参数错误（device_id 不合法）
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                invalidId:
+                  summary: 设备 ID 不合法
+                  value:
+                    error: INVALID_DEVICE_ID
+                    message: 设备 ID 不合法
+        '503':
+          $ref: '../../shared/components.yaml#/components/responses/DeviceServiceUnavailable'
+  /api/agent/v1/maintenance/diagnose:
+    post:
+      tags:
+        - 设备运维
+      summary: 故障诊断
+      description: |
+        根据设备 ID 与故障现象描述，结合历史案例库与大模型进行根因分析，
+        返回可能的根因列表、维修建议列表以及相似历史案例（含相似度得分）。
+        诊断过程可能调用 smt-device-service 获取设备上下文，Java 服务不可达时返回 503。
+      operationId: diagnoseDevice
+      requestBody:
+        required: true
+        description: 故障诊断请求体
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceDiagnoseRequest'
+            examples:
+              vibration:
+                summary: 振动异常诊断
+                value:
+                  device_id: 1001
+                  symptom: 贴片机主轴振动幅值持续偏高
+      responses:
+        '200':
+          description: 诊断成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceDiagnoseResponse'
+              examples:
+                diagnose:
+                  summary: 诊断结果示例
+                  value:
+                    root_causes:
+                      - 主轴轴承磨损
+                      - 安装基础松动
+                    repair_suggestions:
+                      - 检查并更换主轴轴承
+                      - 重新校准设备安装水平
+                    similar_cases:
+                      - case_id: case-0057
+                        symptom: 主轴振动偏高伴随异响
+                        root_cause: 主轴轴承磨损
+                        solution: 更换主轴轴承并复测振动
+                        score: 0.87
+        '400':
+          description: 参数错误（device_id 缺失或 symptom 为空）
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                emptySymptom:
+                  summary: 故障现象为空
+                  value:
+                    error: INVALID_SYMPTOM
+                    message: 故障现象不能为空
+        '503':
+          $ref: '../../shared/components.yaml#/components/responses/DeviceServiceUnavailable'
+  /api/agent/v1/maintenance/predict/{device_id}:
+    get:
+      tags:
+        - 设备运维
+      summary: 设备趋势预测
+      description: |
+        基于设备历史采集数据预测关键指标的未来走势，输出阈值越限告警、预测到达阈值的时间以及运维建议。
+        当历史数据不足以支撑预测时 `data_sufficient=false` 并返回空预测。
+        依赖 smt-device-service 提供历史数据，Java 服务不可达时返回 503。
+      operationId: predictDeviceTrend
+      parameters:
+        - $ref: '../../shared/components.yaml#/components/parameters/DeviceIdPathParam'
+      responses:
+        '200':
+          description: 预测成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenancePredictResponse'
+              examples:
+                predict:
+                  summary: 预测结果示例
+                  value:
+                    trend: 上升
+                    threshold_alerts:
+                      - datapoint_code: TEMP-01
+                        current_value: 78.5
+                        threshold: 85.0
+                        severity: WARNING
+                    forecast:
+                      datapoint_code: TEMP-01
+                      predicted_value: 86.2
+                      hours_to_threshold: 12
+                    recommendation: 建议在 12 小时内检查散热系统并降低负载。
+                    data_sufficient: true
+        '400':
+          description: 参数错误（device_id 不合法）
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                invalidId:
+                  summary: 设备 ID 不合法
+                  value:
+                    error: INVALID_DEVICE_ID
+                    message: 设备 ID 不合法
+        '503':
+          $ref: '../../shared/components.yaml#/components/responses/DeviceServiceUnavailable'
+  /api/agent/v1/maintenance/cases:
+    post:
+      tags:
+        - 设备运维
+      summary: 新增运维案例
+      description: |
+        将一次运维处置经验沉淀为案例写入案例库（Milvus），供后续诊断检索复用。
+        请求体包含设备类型、故障现象、根因与解决方案，返回新建案例 ID。
+      operationId: createMaintenanceCase
+      requestBody:
+        required: true
+        description: 运维案例创建请求体
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceCaseCreateRequest'
+            examples:
+              case:
+                summary: 案例创建示例
+                value:
+                  device_type: MOUNTER
+                  symptom: 主轴振动偏高伴随异响
+                  root_cause: 主轴轴承磨损
+                  solution: 更换主轴轴承并复测振动
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceCaseCreateResponse'
+              examples:
+                success:
+                  summary: 创建成功
+                  value:
+                    case_id: case-0058
+        '400':
+          description: 参数错误（必填字段缺失）
+          content:
+            application/json:
+              schema:
+                $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+              examples:
+                missingField:
+                  summary: 必填字段缺失
+                  value:
+                    error: MISSING_CASE_REQUIRED_FIELDS
+                    message: 设备类型、故障现象、根因、解决方案均为必填
+components:
+  schemas:
+    MaintenanceHealthResponse:
+      type: object
+      description: 设备健康评分响应
+      required:
+        - device_id
+        - health_score
+        - status
+        - risk_level
+        - analysis
+      properties:
+        device_id:
+          type: integer
+          format: int64
+          description: 设备 ID
+          example: 1001
+        health_score:
+          type: integer
+          description: 健康评分（0-100，分数越高越健康）
+          minimum: 0
+          maximum: 100
+          example: 88
+        status:
+          type: string
+          description: 设备运行状态
+          example: RUNNING
+        risk_level:
+          type: string
+          description: 风险等级
+          enum:
+            - LOW
+            - MEDIUM
+            - HIGH
+          example: LOW
+        analysis:
+          type: string
+          description: 运维分析文本（大模型生成）
+          example: 设备运行平稳，温度与振动指标均在阈值范围内。
+    MaintenanceDiagnoseRequest:
+      type: object
+      description: 故障诊断请求体
+      required:
+        - device_id
+        - symptom
+      properties:
+        device_id:
+          type: integer
+          format: int64
+          description: 设备 ID
+          example: 1001
+        symptom:
+          type: string
+          description: 故障现象描述
+          example: 贴片机主轴振动幅值持续偏高
+    MaintenanceSimilarCase:
+      type: object
+      description: 相似历史案例
+      required:
+        - case_id
+        - symptom
+        - root_cause
+        - solution
+        - score
+      properties:
+        case_id:
+          type: string
+          description: 案例 ID
+          example: case-0057
+        symptom:
+          type: string
+          description: 故障现象
+          example: 主轴振动偏高伴随异响
+        root_cause:
+          type: string
+          description: 根因
+          example: 主轴轴承磨损
+        solution:
+          type: string
+          description: 解决方案
+          example: 更换主轴轴承并复测振动
+        score:
+          type: number
+          format: float
+          description: 相似度得分（0-1）
+          minimum: 0
+          maximum: 1
+          example: 0.87
+    MaintenanceDiagnoseResponse:
+      type: object
+      description: 故障诊断响应
+      required:
+        - root_causes
+        - repair_suggestions
+        - similar_cases
+      properties:
+        root_causes:
+          type: array
+          description: 可能的根因列表
+          items:
+            type: string
+          example:
+            - 主轴轴承磨损
+            - 安装基础松动
+        repair_suggestions:
+          type: array
+          description: 维修建议列表
+          items:
+            type: string
+          example:
+            - 检查并更换主轴轴承
+            - 重新校准设备安装水平
+        similar_cases:
+          type: array
+          description: 相似历史案例列表
+          items:
+            $ref: '#/components/schemas/MaintenanceSimilarCase'
+    MaintenanceThresholdAlert:
+      type: object
+      description: 阈值越限告警
+      required:
+        - datapoint_code
+        - current_value
+        - threshold
+        - severity
+      properties:
+        datapoint_code:
+          type: string
+          description: 采集点编码
+          example: TEMP-01
+        current_value:
+          type: number
+          format: float
+          description: 当前值
+          example: 78.5
+        threshold:
+          type: number
+          format: float
+          description: 阈值
+          example: 85.0
+        severity:
+          type: string
+          description: 严重等级
+          enum:
+            - INFO
+            - WARNING
+            - CRITICAL
+          example: WARNING
+    MaintenanceForecast:
+      type: object
+      description: 指标预测结果
+      required:
+        - datapoint_code
+        - predicted_value
+        - hours_to_threshold
+      properties:
+        datapoint_code:
+          type: string
+          description: 采集点编码
+          example: TEMP-01
+        predicted_value:
+          type: number
+          format: float
+          description: 预测值
+          example: 86.2
+        hours_to_threshold:
+          type: integer
+          description: 预计到达阈值的小时数
+          example: 12
+    MaintenancePredictResponse:
+      type: object
+      description: 设备趋势预测响应
+      required:
+        - trend
+        - threshold_alerts
+        - forecast
+        - recommendation
+        - data_sufficient
+      properties:
+        trend:
+          type: string
+          description: 趋势方向（上升/下降/平稳）
+          example: 上升
+        threshold_alerts:
+          type: array
+          description: 阈值越限告警列表
+          items:
+            $ref: '#/components/schemas/MaintenanceThresholdAlert'
+        forecast:
+          $ref: '#/components/schemas/MaintenanceForecast'
+        recommendation:
+          type: string
+          description: 运维建议（大模型生成）
+          example: 建议在 12 小时内检查散热系统并降低负载。
+        data_sufficient:
+          type: boolean
+          description: 历史数据是否足以支撑预测
+          example: true
+    MaintenanceCaseCreateRequest:
+      type: object
+      description: 运维案例创建请求体
+      required:
+        - device_type
+        - symptom
+        - root_cause
+        - solution
+      properties:
+        device_type:
+          type: string
+          description: 设备类型
+          example: MOUNTER
+        symptom:
+          type: string
+          description: 故障现象
+          example: 主轴振动偏高伴随异响
+        root_cause:
+          type: string
+          description: 根因
+          example: 主轴轴承磨损
+        solution:
+          type: string
+          description: 解决方案
+          example: 更换主轴轴承并复测振动
+    MaintenanceCaseCreateResponse:
+      type: object
+      description: 运维案例创建响应
+      required:
+        - case_id
+      properties:
+        case_id:
+          type: string
+          description: 新建案例 ID
+          example: case-0058

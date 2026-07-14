@@ -4,7 +4,7 @@ info:
   description: |
     smt-device-service 设备服务对外 RESTful 接口契约。
 
-    覆盖设备台账 CRUD、采集点配置、历史数据查询、健康评分等场景。
+    覆盖设备台账 CRUD、采集点配置、历史数据查询。
     所有响应统一使用 `Result` / `PageResult` 包装，路径前缀 `/api/device`
     经 `smt-gateway` 网关路由到 `smt-device-service`。
   version: 1.0.0
@@ -843,4 +843,3 @@ components:
                   type: integer
                   description: 每页条数
                   example: 100
-

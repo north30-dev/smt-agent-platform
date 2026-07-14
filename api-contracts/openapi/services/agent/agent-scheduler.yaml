@@ -1,0 +1,596 @@
+openapi: 3.0.3
+info:
+  title: SMT 调度智能体 Agent REST API
+  description: |
+    agent-scheduler 调度智能体接口契约。覆盖订单录入、排产计划生成/查询、急单插单与影响评估。
+    外部路径前缀 /api/agent/v1/scheduler/** 经 smt-gateway StripPrefix=2 路由到 agent-scheduler (8001)。
+    响应体业务对象直返，字段 snake_case。
+  version: 1.0.0
+  contact:
+    name: smt-agent-platform
+    url: https://github.com/north30/smt-agent-platform
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: 本地开发环境（经 smt-gateway 网关）
+tags:
+  - name: 调度智能体
+    description: agent-scheduler 调度智能体 Agent 相关接口
+paths:
+  /api/agent/v1/scheduler/orders:
+    post:
+      tags:
+        - 调度智能体
+      summary: 录入订单
+      description: |
+        录入订单到 PostgreSQL `production_orders` 表，含订单号、产品型号、数量、优先级、交付日期、物料齐套标记。
+        录入后订单状态默认为 PENDING，等待排产计划生成。
+      operationId: createSchedulerOrder
+      requestBody:
+        required: true
+        description: 订单创建请求体
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulerOrderCreateRequest'
+            examples:
+              order:
+                summary: 订单创建示例
+                value:
+                  order_no: ORD-2026-0001
+                  product_model: PCBA-A
+                  quantity: 5000
+                  priority: NORMAL
+                  delivery_date: '2026-07-15'
+                  material_ready: true
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerOrderResponse'
+              examples:
+                success:
+                  summary: 创建成功
+                  value:
+                    order_id: 1
+                    order_no: ORD-2026-0001
+                    product_model: PCBA-A
+                    quantity: 5000
+                    priority: NORMAL
+                    delivery_date: '2026-07-15'
+                    material_ready: true
+                    status: PENDING
+                    created_at: '2026-07-06T08:30:00Z'
+        '400':
+          description: 参数错误（必填字段缺失或值非法）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingField:
+                  summary: 必填字段缺失
+                  value:
+                    error: MISSING_ORDER_REQUIRED_FIELDS
+                    message: 订单号、产品型号、数量、交付日期均为必填
+    get:
+      tags:
+        - 调度智能体
+      summary: 查询订单列表
+      description: 查询订单列表，支持按状态筛选。返回订单总数与记录列表。
+      operationId: listSchedulerOrders
+      parameters:
+        - name: status
+          in: query
+          description: 订单状态筛选（PENDING/PLANNED/COMPLETED/CANCELLED）
+          required: false
+          schema:
+            type: string
+            enum:
+              - PENDING
+              - PLANNED
+              - COMPLETED
+              - CANCELLED
+            example: PENDING
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerOrderListResponse'
+              examples:
+                list:
+                  summary: 订单列表示例
+                  value:
+                    records:
+                      - order_id: 1
+                        order_no: ORD-2026-0001
+                        product_model: PCBA-A
+                        quantity: 5000
+                        priority: NORMAL
+                        delivery_date: '2026-07-15'
+                        material_ready: true
+                        status: PENDING
+                        created_at: '2026-07-06T08:30:00Z'
+                    total: 1
+  /api/agent/v1/scheduler/plan/generate:
+    post:
+      tags:
+        - 调度智能体
+      summary: 生成排产计划
+      description: |
+        基于订单列表（优先级 + 交付日期 + 物料齐套）+ 设备状态（device-service 查询 status/healthScore）+ 简单规则，
+        生成"产品-机台-时段"排产计划，落 PostgreSQL `production_plans` 表，并由 LLM 生成自然语言说明。
+        force_regenerate=true 时强制重新生成；无可排产订单时返回明确提示，不强行生成空计划。
+      operationId: generateSchedulerPlan
+      requestBody:
+        required: false
+        description: 排产计划生成请求体（可传空对象）
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulerPlanGenerateRequest'
+            examples:
+              force:
+                summary: 强制重新生成
+                value:
+                  force_regenerate: true
+      responses:
+        '200':
+          description: 排产计划生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerPlanResponse'
+              examples:
+                plan:
+                  summary: 排产计划示例
+                  value:
+                    plan_id: 7
+                    plan_version: 3
+                    allocations:
+                      - order_no: ORD-2026-0001
+                        product_model: PCBA-A
+                        device_id: 1001
+                        device_name: 贴片机-01
+                        start_hour: 0
+                        duration_hours: 8.0
+                    description: URGENT 订单优先排产，已按交付日期升序分配至可用设备。
+                    status: ACTIVE
+                    created_at: '2026-07-06T08:30:00Z'
+        '400':
+          description: 无可排产订单（订单为空或物料未齐套）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noOrders:
+                  summary: 无可排产订单
+                  value:
+                    error: NO_AVAILABLE_ORDERS
+                    message: 无可用订单（订单为空或物料未齐套）
+        '503':
+          description: 依赖的 Java 服务（smt-device-service）或 LLM 不可达
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                upstream:
+                  summary: 上游服务不可达
+                  value:
+                    error: DEVICE_SERVICE_UNAVAILABLE
+                    message: 上游服务暂不可用
+  /api/agent/v1/scheduler/plan/current:
+    get:
+      tags:
+        - 调度智能体
+      summary: 查询当前排产计划
+      description: 返回当前生效的排产计划（production_plans 表中最新一条 ACTIVE 记录）。
+      operationId: getCurrentSchedulerPlan
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerPlanResponse'
+              examples:
+                current:
+                  summary: 当前计划示例
+                  value:
+                    plan_id: 7
+                    plan_version: 3
+                    allocations:
+                      - order_no: ORD-2026-0001
+                        product_model: PCBA-A
+                        device_id: 1001
+                        device_name: 贴片机-01
+                        start_hour: 0
+                        duration_hours: 8.0
+                    description: URGENT 订单优先排产，已按交付日期升序分配至可用设备。
+                    status: ACTIVE
+                    created_at: '2026-07-06T08:30:00Z'
+        '404':
+          description: 当前无生效排产计划
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noPlan:
+                  summary: 无当前计划
+                  value:
+                    error: PLAN_NOT_FOUND
+                    message: 当前无生效排产计划
+  /api/agent/v1/scheduler/urgent:
+    post:
+      tags:
+        - 调度智能体
+      summary: 急单插单与影响评估
+      description: |
+        急单插入与影响评估：录入急单到 production_orders 表（priority=URGENT），
+        比对当前 production_plans 找出受影响订单列表与延迟时长，
+        由 LLM 生成调整方案（换线建议 / 加班建议）。
+      operationId: evaluateUrgentOrder
+      requestBody:
+        required: true
+        description: 急单插单请求体
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulerUrgentRequest'
+            examples:
+              urgent:
+                summary: 急单插单示例
+                value:
+                  order_no: URGENT-2026-0001
+                  product_model: PCBA-B
+                  quantity: 2000
+                  delivery_date: '2026-07-08'
+      responses:
+        '200':
+          description: 急单影响评估成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulerUrgentResponse'
+              examples:
+                urgent:
+                  summary: 急单评估结果示例
+                  value:
+                    urgent_order_no: URGENT-2026-0001
+                    affected_orders:
+                      - order_no: ORD-2026-0001
+                        product_model: PCBA-A
+                        delay_hours: 4.5
+                    estimated_delay_hours: 4.5
+                    adjustment_plan:
+                      changeover_suggestion: 建议在 02:00-04:00 时段换线至 PCBA-B，对夜班影响最小
+                      overtime_suggestion: 建议安排 4 小时加班以追回延误产能
+        '400':
+          description: 参数错误（必填字段缺失或 quantity 非法）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingField:
+                  summary: 必填字段缺失
+                  value:
+                    error: MISSING_URGENT_ORDER_REQUIRED_FIELDS
+                    message: 订单号、产品型号、数量、交付日期均为必填
+components:
+  schemas:
+    ErrorResponse:
+      $ref: '../../shared/components.yaml#/components/schemas/ErrorResponse'
+    SchedulerOrderCreateRequest:
+      type: object
+      description: 订单创建请求体
+      required:
+        - order_no
+        - product_model
+        - quantity
+        - delivery_date
+        - material_ready
+      properties:
+        order_no:
+          type: string
+          description: 订单号
+          example: ORD-2026-0001
+        product_model:
+          type: string
+          description: 产品型号
+          example: PCBA-A
+        quantity:
+          type: integer
+          description: 订单数量
+          minimum: 1
+          example: 5000
+        priority:
+          type: string
+          description: 优先级
+          enum:
+            - URGENT
+            - HIGH
+            - NORMAL
+            - LOW
+          default: NORMAL
+          example: NORMAL
+        delivery_date:
+          type: string
+          format: date
+          description: 交付日期（ISO-8601 date）
+          example: '2026-07-15'
+        material_ready:
+          type: boolean
+          description: 物料是否齐套
+          example: true
+    SchedulerOrderResponse:
+      type: object
+      description: 订单响应
+      required:
+        - order_id
+        - order_no
+        - product_model
+        - quantity
+        - priority
+        - delivery_date
+        - material_ready
+        - status
+        - created_at
+      properties:
+        order_id:
+          type: integer
+          format: int64
+          description: 订单 ID
+          example: 1
+        order_no:
+          type: string
+          description: 订单号
+          example: ORD-2026-0001
+        product_model:
+          type: string
+          description: 产品型号
+          example: PCBA-A
+        quantity:
+          type: integer
+          description: 订单数量
+          example: 5000
+        priority:
+          type: string
+          description: 优先级
+          enum:
+            - URGENT
+            - HIGH
+            - NORMAL
+            - LOW
+          example: NORMAL
+        delivery_date:
+          type: string
+          format: date
+          description: 交付日期
+          example: '2026-07-15'
+        material_ready:
+          type: boolean
+          description: 物料是否齐套
+          example: true
+        status:
+          type: string
+          description: 订单状态
+          enum:
+            - PENDING
+            - PLANNED
+            - COMPLETED
+            - CANCELLED
+          example: PENDING
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间（ISO-8601）
+          example: '2026-07-06T08:30:00Z'
+    SchedulerOrderListResponse:
+      type: object
+      description: 订单列表响应
+      required:
+        - records
+        - total
+      properties:
+        records:
+          type: array
+          description: 订单列表
+          items:
+            $ref: '#/components/schemas/SchedulerOrderResponse'
+        total:
+          type: integer
+          description: 总订单数
+          example: 1
+    SchedulerPlanGenerateRequest:
+      type: object
+      description: 排产计划生成请求体（可传空对象）
+      properties:
+        force_regenerate:
+          type: boolean
+          description: 是否强制重新生成（默认 false，仅在无 ACTIVE 计划或订单变化时生成）
+          default: false
+          example: false
+    SchedulerPlanAllocation:
+      type: object
+      description: 排产计划分配项
+      required:
+        - order_no
+        - product_model
+        - device_id
+        - device_name
+        - start_hour
+        - duration_hours
+      properties:
+        order_no:
+          type: string
+          description: 订单号
+          example: ORD-2026-0001
+        product_model:
+          type: string
+          description: 产品型号
+          example: PCBA-A
+        device_id:
+          type: integer
+          format: int64
+          description: 分配设备 ID
+          example: 1001
+        device_name:
+          type: string
+          description: 设备名称
+          example: 贴片机-01
+        start_hour:
+          type: integer
+          description: 起始时段（从 0 点开始的偏移小时数）
+          minimum: 0
+          example: 0
+        duration_hours:
+          type: number
+          format: float
+          description: 占用时长（小时）
+          example: 8.0
+    SchedulerPlanResponse:
+      type: object
+      description: 排产计划响应
+      required:
+        - plan_id
+        - plan_version
+        - allocations
+        - description
+        - status
+        - created_at
+      properties:
+        plan_id:
+          type: integer
+          format: int64
+          description: 计划 ID
+          example: 7
+        plan_version:
+          type: integer
+          description: 计划版本号
+          example: 3
+        allocations:
+          type: array
+          description: 订单-设备-时段分配列表
+          items:
+            $ref: '#/components/schemas/SchedulerPlanAllocation'
+        description:
+          type: string
+          description: 计划说明文本（LLM 生成，≤200 字）
+          example: URGENT 订单优先排产，已按交付日期升序分配至可用设备。
+        status:
+          type: string
+          description: 计划状态
+          enum:
+            - ACTIVE
+            - SUPERSEDED
+            - DRAFT
+          example: ACTIVE
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间（ISO-8601）
+          example: '2026-07-06T08:30:00Z'
+    SchedulerUrgentRequest:
+      type: object
+      description: 急单插单请求体
+      required:
+        - order_no
+        - product_model
+        - quantity
+        - delivery_date
+      properties:
+        order_no:
+          type: string
+          description: 急单订单号
+          example: URGENT-2026-0001
+        product_model:
+          type: string
+          description: 产品型号
+          example: PCBA-B
+        quantity:
+          type: integer
+          description: 订单数量
+          minimum: 1
+          example: 2000
+        delivery_date:
+          type: string
+          format: date
+          description: 交付日期（ISO-8601 date）
+          example: '2026-07-08'
+        source:
+          type: string
+          description: 订单来源（user/orchestrator_synthetic），用于追溯合成急单
+          default: user
+          example: user
+    SchedulerAffectedOrder:
+      type: object
+      description: 受急单影响的订单
+      required:
+        - order_no
+        - product_model
+        - delay_hours
+      properties:
+        order_no:
+          type: string
+          description: 受影响订单号
+          example: ORD-2026-0001
+        product_model:
+          type: string
+          description: 产品型号
+          example: PCBA-A
+        delay_hours:
+          type: number
+          format: float
+          description: 延迟小时数
+          minimum: 0
+          example: 4.5
+    SchedulerAdjustmentPlan:
+      type: object
+      description: 急单调整方案
+      required:
+        - changeover_suggestion
+        - overtime_suggestion
+      properties:
+        changeover_suggestion:
+          type: string
+          description: 换线建议（LLM 生成）
+          example: 建议在 02:00-04:00 时段换线至 PCBA-B，对夜班影响最小
+        overtime_suggestion:
+          type: string
+          description: 加班建议（LLM 生成）
+          example: 建议安排 4 小时加班以追回延误产能
+    SchedulerUrgentResponse:
+      type: object
+      description: 急单影响评估响应
+      required:
+        - urgent_order_no
+        - affected_orders
+        - estimated_delay_hours
+        - adjustment_plan
+      properties:
+        urgent_order_no:
+          type: string
+          description: 急单订单号
+          example: URGENT-2026-0001
+        affected_orders:
+          type: array
+          description: 受影响订单列表
+          items:
+            $ref: '#/components/schemas/SchedulerAffectedOrder'
+        estimated_delay_hours:
+          type: number
+          format: float
+          description: 预计总延迟小时数
+          minimum: 0
+          example: 4.5
+        adjustment_plan:
+          $ref: '#/components/schemas/SchedulerAdjustmentPlan'

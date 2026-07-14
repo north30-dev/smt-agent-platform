@@ -1,0 +1,99 @@
+openapi: 3.0.3
+info:
+  title: SMT 智能运维平台 API 聚合契约
+  description: |
+    聚合平台所有服务的 RESTful 接口契约，涵盖 Java 后端服务与 Python 智能体。
+
+    各服务独立规范文件：
+    - `services/backend/device-service.yaml` — smt-device-service 设备服务
+    - `services/agent/agent-knowledge.yaml` — 知识助手 Agent
+    - `services/agent/agent-maintenance.yaml` — 设备运维 Agent
+    - `services/agent/agent-quality.yaml` — 质量分析 Agent
+    - `services/agent/agent-scheduler.yaml` — 调度智能体
+    - `services/agent/agent-orchestrator.yaml` — 编排智能体
+    - `services/agent/agent-execution.yaml` — 执行智能体
+
+    共享组件定义在 `shared/components.yaml`。
+
+    本文件通过 `$ref` 引用各服务文件，提供一次性查看全量 API 的能力。
+  version: 1.0.0
+  contact:
+    name: smt-agent-platform
+    url: https://github.com/north30/smt-agent-platform
+  license:
+    name: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: 本地开发环境（经 smt-gateway 网关）
+paths:
+  # ===== Backend: device-service =====
+  /api/device:
+    $ref: 'services/backend/device-service.yaml#/paths/~1api~1device'
+  /api/device/{id}:
+    $ref: 'services/backend/device-service.yaml#/paths/~1api~1device~1{id}'
+  /api/device/list:
+    $ref: 'services/backend/device-service.yaml#/paths/~1api~1device~1list'
+  /api/device/{deviceId}/datapoints:
+    $ref: 'services/backend/device-service.yaml#/paths/~1api~1device~1{deviceId}~1datapoints'
+  /api/device/{deviceId}/data:
+    $ref: 'services/backend/device-service.yaml#/paths/~1api~1device~1{deviceId}~1data'
+  # ===== Agent: knowledge =====
+  /api/agent/v1/knowledge/upload:
+    $ref: 'services/agent/agent-knowledge.yaml#/paths/~1api~1agent~1v1~1knowledge~1upload'
+  /api/agent/v1/knowledge/ask:
+    $ref: 'services/agent/agent-knowledge.yaml#/paths/~1api~1agent~1v1~1knowledge~1ask'
+  /api/agent/v1/knowledge/documents:
+    $ref: 'services/agent/agent-knowledge.yaml#/paths/~1api~1agent~1v1~1knowledge~1documents'
+  /api/agent/v1/knowledge/documents/{doc_id}:
+    $ref: 'services/agent/agent-knowledge.yaml#/paths/~1api~1agent~1v1~1knowledge~1documents~1{doc_id}'
+  # ===== Agent: maintenance =====
+  /api/agent/v1/maintenance/health/{device_id}:
+    $ref: 'services/agent/agent-maintenance.yaml#/paths/~1api~1agent~1v1~1maintenance~1health~1{device_id}'
+  /api/agent/v1/maintenance/diagnose:
+    $ref: 'services/agent/agent-maintenance.yaml#/paths/~1api~1agent~1v1~1maintenance~1diagnose'
+  /api/agent/v1/maintenance/predict/{device_id}:
+    $ref: 'services/agent/agent-maintenance.yaml#/paths/~1api~1agent~1v1~1maintenance~1predict~1{device_id}'
+  /api/agent/v1/maintenance/cases:
+    $ref: 'services/agent/agent-maintenance.yaml#/paths/~1api~1agent~1v1~1maintenance~1cases'
+  # ===== Agent: quality =====
+  /api/agent/v1/quality/monitor/{device_id}:
+    $ref: 'services/agent/agent-quality.yaml#/paths/~1api~1agent~1v1~1quality~1monitor~1{device_id}'
+  /api/agent/v1/quality/root_cause:
+    $ref: 'services/agent/agent-quality.yaml#/paths/~1api~1agent~1v1~1quality~1root_cause'
+  /api/agent/v1/quality/cases:
+    $ref: 'services/agent/agent-quality.yaml#/paths/~1api~1agent~1v1~1quality~1cases'
+  /api/agent/v1/quality/alerts:
+    $ref: 'services/agent/agent-quality.yaml#/paths/~1api~1agent~1v1~1quality~1alerts'
+  # ===== Agent: scheduler =====
+  /api/agent/v1/scheduler/orders:
+    $ref: 'services/agent/agent-scheduler.yaml#/paths/~1api~1agent~1v1~1scheduler~1orders'
+  /api/agent/v1/scheduler/plan/generate:
+    $ref: 'services/agent/agent-scheduler.yaml#/paths/~1api~1agent~1v1~1scheduler~1plan~1generate'
+  /api/agent/v1/scheduler/plan/current:
+    $ref: 'services/agent/agent-scheduler.yaml#/paths/~1api~1agent~1v1~1scheduler~1plan~1current'
+  /api/agent/v1/scheduler/urgent:
+    $ref: 'services/agent/agent-scheduler.yaml#/paths/~1api~1agent~1v1~1scheduler~1urgent'
+  # ===== Agent: orchestrator =====
+  /api/agent/v1/orchestrator/device_fault:
+    $ref: 'services/agent/agent-orchestrator.yaml#/paths/~1api~1agent~1v1~1orchestrator~1device_fault'
+  /api/agent/v1/orchestrator/device_fault_event:
+    $ref: 'services/agent/agent-orchestrator.yaml#/paths/~1api~1agent~1v1~1orchestrator~1device_fault_event'
+  /api/agent/v1/orchestrator/workflows/{workflow_id}:
+    $ref: 'services/agent/agent-orchestrator.yaml#/paths/~1api~1agent~1v1~1orchestrator~1workflows~1{workflow_id}'
+  # ===== Agent: execution =====
+  /api/agent/v1/execution/instructions:
+    $ref: 'services/agent/agent-execution.yaml#/paths/~1api~1agent~1v1~1execution~1instructions'
+  /api/agent/v1/execution/instructions/{instruction_id}:
+    $ref: 'services/agent/agent-execution.yaml#/paths/~1api~1agent~1v1~1execution~1instructions~1{instruction_id}'
+  /api/agent/v1/execution/instructions/{instruction_id}/approve:
+    $ref: 'services/agent/agent-execution.yaml#/paths/~1api~1agent~1v1~1execution~1instructions~1{instruction_id}~1approve'
+  /api/agent/v1/execution/instructions/{instruction_id}/progress:
+    $ref: 'services/agent/agent-execution.yaml#/paths/~1api~1agent~1v1~1execution~1instructions~1{instruction_id}~1progress'
+  /api/agent/v1/execution/exceptions:
+    $ref: 'services/agent/agent-execution.yaml#/paths/~1api~1agent~1v1~1execution~1exceptions'
+  /api/agent/v1/execution/exceptions/{exception_id}/verify:
+    $ref: 'services/agent/agent-execution.yaml#/paths/~1api~1agent~1v1~1execution~1exceptions~1{exception_id}~1verify'
+  /api/agent/v1/execution/exceptions/{exception_id}/analyze:
+    $ref: 'services/agent/agent-execution.yaml#/paths/~1api~1agent~1v1~1execution~1exceptions~1{exception_id}~1analyze'
+  /api/agent/v1/execution/exceptions/{exception_id}/handle:
+    $ref: 'services/agent/agent-execution.yaml#/paths/~1api~1agent~1v1~1execution~1exceptions~1{exception_id}~1handle'
