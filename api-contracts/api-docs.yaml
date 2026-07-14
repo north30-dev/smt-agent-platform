@@ -1,0 +1,832 @@
+openapi: 3.0.1
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:8081
+  description: Generated server url
+tags:
+- name: 设备台账
+  description: 设备元信息增删改查
+- name: 采集点配置
+  description: 设备采集点（数据项）配置管理
+- name: 设备数据
+  description: 设备实时/历史数据查询
+- name: 认证
+  description: 用户认证与鉴权
+paths:
+  /api/device/{id}:
+    get:
+      tags:
+      - 设备台账
+      summary: 设备详情
+      description: 根据设备 ID 查询单台设备完整信息
+      operationId: getById
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultDevice'
+    put:
+      tags:
+      - 设备台账
+      summary: 更新设备
+      description: 根据设备 ID 更新设备信息，deviceCode 不允许修改
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdateDTO'
+        required: true
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultDevice'
+    delete:
+      tags:
+      - 设备台账
+      summary: 删除设备（软删除）
+      description: 根据设备 ID 软删除设备，标记 is_deleted=1
+      operationId: delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+  /api/device:
+    post:
+      tags:
+      - 设备台账
+      summary: 新增设备
+      description: 创建一台新设备并写入 device 表，返回设备 ID 与完整信息
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreateDTO'
+        required: true
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultDevice'
+  /api/device/{deviceId}/datapoints:
+    get:
+      tags:
+      - 采集点配置
+      summary: 查询设备下所有采集点
+      description: 返回指定设备下的全部采集点配置列表
+      operationId: list
+      parameters:
+      - name: deviceId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultListDeviceDataPoint'
+    post:
+      tags:
+      - 采集点配置
+      summary: 为设备新增采集点
+      description: 为指定设备新增一个采集点，datapointCode 在同一设备下唯一
+      operationId: create_1
+      parameters:
+      - name: deviceId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataPointCreateDTO'
+        required: true
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultDeviceDataPoint'
+  /api/auth/login:
+    post:
+      tags:
+      - 认证
+      summary: 用户登录
+      description: 校验用户名密码，签发 JWT Token
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+  /api/device/{deviceId}/data:
+    get:
+      tags:
+      - 设备数据
+      summary: 历史数据查询
+      description: 按采集点编码与时间范围分页查询设备历史数据，结果按 timestamp 升序返回
+      operationId: history
+      parameters:
+      - name: deviceId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: datapointCode
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: startTime
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: endTime
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: size
+        in: query
+        required: false
+        schema:
+          maximum: 1000
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageVODeviceData'
+  /api/device/list:
+    get:
+      tags:
+      - 设备台账
+      summary: 分页查询设备列表
+      description: 按产线/类型/状态可选筛选，分页返回设备列表
+      operationId: list_1
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: size
+        in: query
+        required: false
+        schema:
+          maximum: 200
+          type: integer
+          format: int32
+          default: 10
+      - name: productionLine
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: deviceType
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageVODevice'
+  /api/auth/me:
+    get:
+      tags:
+      - 认证
+      summary: 当前用户信息
+      description: 查询当前登录用户信息，需认证
+      operationId: me
+      responses:
+        "400":
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "401":
+          description: Unauthorized
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "403":
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "500":
+          description: Internal Server Error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+components:
+  schemas:
+    ResultVoid:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: object
+    DeviceUpdateDTO:
+      type: object
+      properties:
+        deviceName:
+          maxLength: 128
+          minLength: 0
+          type: string
+        deviceType:
+          maxLength: 32
+          minLength: 0
+          pattern: PRINTER|MOUNTER|REFLOW|AOI|SPI|OTHER
+          type: string
+        productionLine:
+          maxLength: 32
+          minLength: 0
+          type: string
+        ipAddress:
+          maxLength: 64
+          minLength: 0
+          type: string
+        protocolType:
+          maxLength: 16
+          minLength: 0
+          pattern: OPC_UA|MQTT
+          type: string
+        opcUaEndpoint:
+          maxLength: 256
+          minLength: 0
+          type: string
+        status:
+          maxLength: 16
+          minLength: 0
+          pattern: RUNNING|STOPPED|MAINTENANCE
+          type: string
+    Device:
+      type: object
+      properties:
+        createTime:
+          type: string
+          format: date-time
+        updateTime:
+          type: string
+          format: date-time
+        createBy:
+          type: string
+        updateBy:
+          type: string
+        deleted:
+          type: integer
+          format: int32
+        id:
+          type: integer
+          format: int64
+        deviceCode:
+          type: string
+        deviceName:
+          type: string
+        deviceType:
+          type: string
+        productionLine:
+          type: string
+        ipAddress:
+          type: string
+        protocolType:
+          type: string
+        opcUaEndpoint:
+          type: string
+        status:
+          type: string
+        healthScore:
+          type: integer
+          format: int32
+    ResultDevice:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/Device'
+    DeviceCreateDTO:
+      required:
+      - deviceCode
+      - deviceName
+      - deviceType
+      - ipAddress
+      - productionLine
+      - protocolType
+      - status
+      type: object
+      properties:
+        deviceCode:
+          maxLength: 64
+          minLength: 0
+          type: string
+        deviceName:
+          maxLength: 128
+          minLength: 0
+          type: string
+        deviceType:
+          maxLength: 32
+          minLength: 0
+          pattern: PRINTER|MOUNTER|REFLOW|AOI|SPI|OTHER
+          type: string
+        productionLine:
+          maxLength: 32
+          minLength: 0
+          type: string
+        ipAddress:
+          maxLength: 64
+          minLength: 0
+          type: string
+        protocolType:
+          maxLength: 16
+          minLength: 0
+          pattern: OPC_UA|MQTT
+          type: string
+        opcUaEndpoint:
+          maxLength: 256
+          minLength: 0
+          type: string
+        status:
+          maxLength: 16
+          minLength: 0
+          pattern: RUNNING|STOPPED|MAINTENANCE
+          type: string
+    DataPointCreateDTO:
+      required:
+      - dataType
+      - datapointCode
+      - datapointName
+      - nodePath
+      - sampleIntervalMs
+      type: object
+      properties:
+        datapointCode:
+          maxLength: 64
+          minLength: 0
+          type: string
+        datapointName:
+          maxLength: 128
+          minLength: 0
+          type: string
+        nodePath:
+          maxLength: 256
+          minLength: 0
+          type: string
+        dataType:
+          maxLength: 16
+          minLength: 0
+          pattern: NUMBER|STRING|BOOLEAN
+          type: string
+        sampleIntervalMs:
+          minimum: 100
+          type: integer
+          format: int32
+    DeviceDataPoint:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        deviceId:
+          type: integer
+          format: int64
+        datapointCode:
+          type: string
+        datapointName:
+          type: string
+        nodePath:
+          type: string
+        dataType:
+          type: string
+        sampleIntervalMs:
+          type: integer
+          format: int32
+        createTime:
+          type: string
+          format: date-time
+    ResultDeviceDataPoint:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/DeviceDataPoint'
+    LoginRequest:
+      required:
+      - password
+      - username
+      type: object
+      properties:
+        username:
+          maxLength: 64
+          minLength: 0
+          type: string
+        password:
+          maxLength: 128
+          minLength: 0
+          type: string
+    ResultMapStringObject:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: object
+          additionalProperties:
+            type: object
+    ResultListDeviceDataPoint:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceDataPoint'
+    DeviceData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        deviceId:
+          type: integer
+          format: int64
+        datapointCode:
+          type: string
+        value:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    PageVODeviceData:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceData'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+    ResultPageVODeviceData:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/PageVODeviceData'
+    PageVODevice:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/Device'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+    ResultPageVODevice:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/PageVODevice'

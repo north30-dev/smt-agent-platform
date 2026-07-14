@@ -146,3 +146,13 @@ smt:
     bucket: ${SMT_INFLUXDB_BUCKET:device_data}
 
 # 注：logging 段已迁移到 logback-spring.xml 与 application-{profile}.yml（P0-8）
+
+# springdoc-openapi：自动生成 OpenAPI 3.0 文档
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  packages-to-scan: com.smt.platform.device.controller

@@ -99,6 +99,8 @@ bash scripts/stop_all.sh        # 停止所有本地服务
 - Java 包名一律用 `com.smt.platform.<模块>`：`com.smt.platform.device`
 - 实体类必须用 MyBatis-Plus 注解，不用 JPA
 - 所有 REST 接口路径以 `/api/<模块>/*` 为前缀
+- 所有 Controller 必须添加 `@Tag`（类级别）和 `@Operation`（方法级别）OpenAPI 注解，用于自动生成 API 文档
+- API 文档访问地址：`/swagger-ui.html`（Swagger UI）、`/v3/api-docs`（OpenAPI JSON）
 
 ### 3.2 Python
 

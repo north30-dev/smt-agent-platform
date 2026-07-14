@@ -86,6 +86,12 @@
             <artifactId>smt-common</artifactId>
         </dependency>
 
+        <!-- springdoc-openapi：自动生成 OpenAPI 3.0 文档 -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

@@ -34,6 +34,7 @@
         <hutool.version>5.8.27</hutool.version>
         <jjwt.version>0.12.5</jjwt.version>
         <postgresql.version>42.7.3</postgresql.version>
+        <springdoc.version>2.6.0</springdoc.version>
     </properties>
 
     <dependencyManagement>
@@ -92,6 +93,18 @@
                 <groupId>com.smt.platform</groupId>
                 <artifactId>smt-common</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+
+            <!-- springdoc-openapi（Spring Boot 3 专用） -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+                <version>${springdoc.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -21,14 +21,53 @@ from agent_maintenance.main import app as maintenance_app
 pytestmark = pytest.mark.contract
 
 
-_CONTRACT_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "api-contracts", "openapi", "agent_api.yaml"
+_CONTRACT_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "..", "api-contracts", "openapi", "services", "agent"
+)
+_SHARED_COMPONENTS_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "..", "api-contracts", "openapi", "shared", "components.yaml"
 )
 
 
+def _load_shared_components():
+    """加载 shared/components.yaml 中的 schemas。"""
+    with open(_SHARED_COMPONENTS_PATH, encoding="utf-8") as f:
+        doc = yaml.safe_load(f)
+    return doc.get("components", {}).get("schemas", {})
+
+
+def _resolve_refs(schema, shared_schemas):
+    """递归解析 $ref 引用。"""
+    if isinstance(schema, dict):
+        if "$ref" in schema:
+            ref = schema["$ref"]
+            if ref.startswith("../../shared/components.yaml#/components/schemas/"):
+                schema_name = ref.split("/")[-1]
+                return shared_schemas.get(schema_name, schema)
+            return schema
+        return {k: _resolve_refs(v, shared_schemas) for k, v in schema.items()}
+    if isinstance(schema, list):
+        return [_resolve_refs(item, shared_schemas) for item in schema]
+    return schema
+
+
 def _load_contract():
-    with open(_CONTRACT_PATH, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """合并所有 agent 契约文件为一个统一的契约字典，解析 $ref 引用。"""
+    shared_schemas = _load_shared_components()
+    merged = {"openapi": "3.0.3", "paths": {}, "components": {"schemas": {}}}
+    for filename in sorted(os.listdir(_CONTRACT_DIR)):
+        if not filename.endswith(".yaml"):
+            continue
+        filepath = os.path.join(_CONTRACT_DIR, filename)
+        with open(filepath, encoding="utf-8") as f:
+            doc = yaml.safe_load(f)
+        if not doc:
+            continue
+        merged["paths"].update(doc.get("paths", {}))
+        schemas = doc.get("components", {}).get("schemas", {})
+        for name, schema in schemas.items():
+            merged["components"]["schemas"][name] = _resolve_refs(schema, shared_schemas)
+    return merged
 
 
 def _normalize_path(path):

@@ -4,6 +4,8 @@ import com.smt.platform.common.response.Result;
 import com.smt.platform.device.model.entity.DeviceData;
 import com.smt.platform.device.model.vo.PageVO;
 import com.smt.platform.device.service.DeviceDataService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import org.springframework.cache.annotation.Cacheable;
@@ -31,6 +33,7 @@ import java.time.LocalDateTime;
 @RestController
 @RequestMapping("/api/device/{deviceId}/data")
 @Validated
+@Tag(name = "设备数据", description = "设备实时/历史数据查询")
 public class DeviceDataController {
 
     private final DeviceDataService deviceDataService;
@@ -48,6 +51,7 @@ public class DeviceDataController {
     @GetMapping
     @Cacheable(value = "device:data:history",
             key = "#deviceId + ':' + #datapointCode + ':' + #startTime + ':' + #endTime + ':' + #page + ':' + #size")
+    @Operation(summary = "历史数据查询", description = "按采集点编码与时间范围分页查询设备历史数据，结果按 timestamp 升序返回")
     public Result<PageVO<DeviceData>> history(
             @PathVariable @Positive Long deviceId,
             @RequestParam String datapointCode,

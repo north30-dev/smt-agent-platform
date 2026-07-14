@@ -85,6 +85,8 @@ async def chat(messages: list[dict], temperature: float = 0.3) -> str:
         "model": settings.llm_model,
         "messages": messages,
         "temperature": temperature,
+        "max_tokens": settings.llm_max_tokens,
+        "frequency_penalty": settings.llm_frequency_penalty,
     }
 
     try:
@@ -117,7 +119,12 @@ async def chat(messages: list[dict], temperature: float = 0.3) -> str:
                     )
                 try:
                     data = resp.json()
-                    return data["choices"][0]["message"]["content"]
+                    content = data["choices"][0]["message"]["content"]
+                    if not content or not content.strip():
+                        raise LLMClientError(
+                            "大模型返回空内容（content 为空），模型可能陷入推理循环"
+                        )
+                    return content
                 except (ValueError, KeyError, IndexError) as exc:
                     raise LLMClientError(f"解析大模型对话响应失败：{exc}") from exc
     except (httpx.TimeoutException, httpx.ConnectError) as exc:

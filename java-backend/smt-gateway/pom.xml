@@ -33,6 +33,12 @@
             <artifactId>smt-common</artifactId>
         </dependency>
 
+        <!-- springdoc-openapi（响应式版本，用于 Gateway） -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+        </dependency>
+
         <!-- 测试依赖（P0-4：AgentAuthWebFilter 单测需要） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

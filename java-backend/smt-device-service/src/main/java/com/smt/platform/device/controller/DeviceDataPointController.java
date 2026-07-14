@@ -4,6 +4,8 @@ import com.smt.platform.common.response.Result;
 import com.smt.platform.device.model.dto.DataPointCreateDTO;
 import com.smt.platform.device.model.entity.DeviceDataPoint;
 import com.smt.platform.device.service.DeviceDataPointService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +24,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/device/{deviceId}/datapoints")
+@Tag(name = "采集点配置", description = "设备采集点（数据项）配置管理")
 public class DeviceDataPointController {
 
     private final DeviceDataPointService deviceDataPointService;
@@ -32,6 +35,7 @@ public class DeviceDataPointController {
 
     /** 为指定设备新增采集点 */
     @PostMapping
+    @Operation(summary = "为设备新增采集点", description = "为指定设备新增一个采集点，datapointCode 在同一设备下唯一")
     public Result<DeviceDataPoint> create(@PathVariable Long deviceId,
                                           @Valid @RequestBody DataPointCreateDTO dto) {
         DeviceDataPoint datapoint = new DeviceDataPoint();
@@ -41,6 +45,7 @@ public class DeviceDataPointController {
 
     /** 查询指定设备下的全部采集点 */
     @GetMapping
+    @Operation(summary = "查询设备下所有采集点", description = "返回指定设备下的全部采集点配置列表")
     public Result<List<DeviceDataPoint>> list(@PathVariable Long deviceId) {
         return Result.success(deviceDataPointService.listByDeviceId(deviceId));
     }

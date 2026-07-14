@@ -3,6 +3,8 @@ package com.smt.platform.device.controller;
 import com.smt.platform.common.response.Result;
 import com.smt.platform.common.response.ResultCode;
 import com.smt.platform.common.utils.JwtUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -32,6 +34,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "认证", description = "用户认证与鉴权")
 public class AuthController {
 
     private final JwtUtil jwtUtil;
@@ -56,6 +59,7 @@ public class AuthController {
      * 用户登录：校验凭据，签发 JWT。
      */
     @PostMapping("/login")
+    @Operation(summary = "用户登录", description = "校验用户名密码，签发 JWT Token")
     public Result<Map<String, Object>> login(@RequestBody LoginRequest request) {
         if (!adminUsername.equals(request.getUsername())
                 || !passwordEncoder.matches(request.getPassword(), adminPasswordPlain)) {
@@ -78,6 +82,7 @@ public class AuthController {
      * 查询当前登录用户信息（需认证）。
      */
     @GetMapping("/me")
+    @Operation(summary = "当前用户信息", description = "查询当前登录用户信息，需认证")
     public Result<Map<String, Object>> me(HttpServletRequest request) {
         Object principal = request.getUserPrincipal();
         if (principal == null) {

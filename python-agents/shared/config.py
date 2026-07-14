@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     # M1：重试与熔断配置
     llm_max_retries: int = 3
     llm_retry_backoff: float = 1.0
+    llm_max_tokens: int = 4096
+    llm_frequency_penalty: float = 0.5
     device_service_max_retries: int = 2
     milvus_max_retries: int = 2
     milvus_retry_backoff: float = 1.0

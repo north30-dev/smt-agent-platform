@@ -6,6 +6,8 @@ import com.smt.platform.device.model.dto.DeviceUpdateDTO;
 import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.model.vo.PageVO;
 import com.smt.platform.device.service.DeviceService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
@@ -34,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/device")
+@Tag(name = "设备台账", description = "设备元信息增删改查")
 public class DeviceController {
 
     private final DeviceService deviceService;
@@ -45,6 +48,7 @@ public class DeviceController {
     /** 新增设备 */
     @PostMapping
     @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "新增设备", description = "创建一台新设备并写入 device 表，返回设备 ID 与完整信息")
     public Result<Device> create(@Valid @RequestBody DeviceCreateDTO dto) {
         Device device = new Device();
         BeanUtils.copyProperties(dto, device);
@@ -54,6 +58,7 @@ public class DeviceController {
     /** 更新设备（部分字段更新，deviceCode 不可改） */
     @PutMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "更新设备", description = "根据设备 ID 更新设备信息，deviceCode 不允许修改")
     public Result<Device> update(@PathVariable Long id, @Valid @RequestBody DeviceUpdateDTO dto) {
         Device device = new Device();
         BeanUtils.copyProperties(dto, device);
@@ -63,6 +68,7 @@ public class DeviceController {
     /** 删除设备（软删除） */
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "删除设备（软删除）", description = "根据设备 ID 软删除设备，标记 is_deleted=1")
     public Result<Void> delete(@PathVariable Long id) {
         deviceService.delete(id);
         return Result.success();
@@ -70,12 +76,14 @@ public class DeviceController {
 
     /** 查询设备详情（P0-1：改用 getByIdOrThrow 承担"找不到抛 404"语义） */
     @GetMapping("/{id}")
+    @Operation(summary = "设备详情", description = "根据设备 ID 查询单台设备完整信息")
     public Result<Device> getById(@PathVariable Long id) {
         return Result.success(deviceService.getByIdOrThrow(id));
     }
 
     /** 分页查询设备列表，支持按产线/类型/状态筛选 */
     @GetMapping("/list")
+    @Operation(summary = "分页查询设备列表", description = "按产线/类型/状态可选筛选，分页返回设备列表")
     public Result<PageVO<Device>> list(
             @RequestParam(defaultValue = "1") @Positive int page,
             @RequestParam(defaultValue = "10") @Positive @Max(200) int size,
