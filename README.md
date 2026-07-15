@@ -93,6 +93,7 @@ uv run uvicorn agent-maintenance.main:app --port 8002 --reload # 运维 Agent
 uv run uvicorn agent-quality.main:app --port 8003 --reload     # 质量分析 Agent
 uv run uvicorn agent-scheduler.main:app --port 8001 --reload   # 调度智能体
 uv run uvicorn agent-orchestrator.main:app --port 8005 --reload # LangGraph 多 Agent 编排
+uv run uvicorn agent-execution.main:app --port 8006 --reload   # 执行协同 Agent 
 ```
 
 ### 4. 前端

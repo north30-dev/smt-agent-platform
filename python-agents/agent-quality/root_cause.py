@@ -15,6 +15,7 @@ from uuid import uuid4
 import yaml
 
 from shared import llm_client, vector_store
+from shared.llm_schemas import ROOT_CAUSE_SCHEMA
 from shared.text_utils import extract_json_block as _extract_json_block
 
 # 复用 shared 中的 device-service HTTP 客户端
@@ -119,7 +120,8 @@ async def analyze(device_id: int, defect_description: str) -> dict:
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
-        ]
+        ],
+        json_schema=ROOT_CAUSE_SCHEMA,
     )
 
     # 4. 解析 LLM 输出

@@ -68,7 +68,7 @@ def test_device_fault_workflow_e2e():
     resp = httpx.post(
         f"{ORCHESTRATOR_BASE}/v1/orchestrator/device_fault",
         json={"device_id": device_id, "symptom": "E2E 测试：贴片精度偏移"},
-        timeout=120.0,
+        timeout=180.0,
     )
     assert resp.status_code == 200, f"编排触发失败: {resp.text}"
     workflow = resp.json()

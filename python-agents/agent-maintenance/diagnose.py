@@ -15,6 +15,7 @@ from uuid import uuid4
 import yaml
 
 from shared import llm_client, vector_store
+from shared.llm_schemas import DIAGNOSE_SCHEMA
 from shared.text_utils import extract_json_block as _extract_json_block
 
 from shared.device_client import DeviceServiceUnavailable, device_client
@@ -114,7 +115,8 @@ async def diagnose(device_id: int, symptom: str) -> dict:
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
-        ]
+        ],
+        json_schema=DIAGNOSE_SCHEMA,
     )
 
     # 4. 解析 LLM 输出

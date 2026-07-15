@@ -17,6 +17,7 @@ from pathlib import Path
 import yaml
 
 from shared import llm_client
+from shared.llm_schemas import URGENT_SCHEMA
 from shared.config import settings
 from shared.text_utils import extract_json_block as _extract_json_block, truncate as _truncate
 
@@ -111,7 +112,8 @@ async def handle_urgent(req) -> dict:
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
-        ]
+        ],
+        json_schema=URGENT_SCHEMA,
     )
     adjustment_plan = _parse_adjustment_plan(raw)
 

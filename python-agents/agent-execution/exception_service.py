@@ -12,6 +12,7 @@ import json
 
 from shared import db, llm_client
 from shared.llm_client import LLMClientError
+from shared.llm_schemas import EXCEPTION_ANALYSIS_SCHEMA
 
 from .models import ExceptionCreateRequest, VerifyRequest
 
@@ -70,7 +71,9 @@ async def analyze_exception(exception_id: str) -> dict:
     ]
 
     try:
-        response = await llm_client.chat(messages)
+        response = await llm_client.chat(
+            messages, json_schema=EXCEPTION_ANALYSIS_SCHEMA
+        )
     except LLMClientError as exc_err:
         analysis = {
             "status": "degraded",
