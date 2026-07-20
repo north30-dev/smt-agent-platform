@@ -2,24 +2,19 @@ package com.smt.platform.device.controller;
 
 import com.smt.platform.common.response.Result;
 import com.smt.platform.common.response.ResultCode;
-import com.smt.platform.common.utils.JwtUtil;
+import com.smt.platform.device.model.dto.LoginRequestDTO;
+import com.smt.platform.device.service.AuthService;
+
+import jakarta.validation.Valid;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.Data;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * 认证接口（P0-4 RBAC 骨架）。
@@ -37,22 +32,10 @@ import java.util.Map;
 @Tag(name = "认证", description = "用户认证与鉴权")
 public class AuthController {
 
-    private final JwtUtil jwtUtil;
-    private final PasswordEncoder passwordEncoder;
+    private final AuthService authService;
 
-    @Value("${smt.security.admin.username}")
-    private String adminUsername;
-
-    /** 已加密的 admin 密码（BCrypt 哈希），登录时用 PasswordEncoder.matches(raw, hash) 校验 */
-    @Value("${smt.security.admin.password}")
-    private String adminPasswordPlain;
-
-    @Value("${smt.security.jwt.expiry-seconds:86400}")
-    private long expirySeconds;
-
-    public AuthController(JwtUtil jwtUtil, PasswordEncoder passwordEncoder) {
-        this.jwtUtil = jwtUtil;
-        this.passwordEncoder = passwordEncoder;
+    public AuthController(AuthService authService) {
+        this.authService = authService;
     }
 
     /**
@@ -60,22 +43,8 @@ public class AuthController {
      */
     @PostMapping("/login")
     @Operation(summary = "用户登录", description = "校验用户名密码，签发 JWT Token")
-    public Result<Map<String, Object>> login(@RequestBody LoginRequest request) {
-        if (!adminUsername.equals(request.getUsername())
-                || !passwordEncoder.matches(request.getPassword(), adminPasswordPlain)) {
-            throw new BadCredentialsException("用户名或密码错误");
-        }
-        // Phase 1 单用户固定 ADMIN 角色
-        List<String> roles = List.of("ADMIN");
-        long expireMs = expirySeconds * 1000L;
-        String token = jwtUtil.generateToken(request.getUsername(), roles, expireMs);
-        return Result.success(Map.of(
-                "token", token,
-                "tokenType", "Bearer",
-                "expiresIn", expirySeconds,
-                "username", request.getUsername(),
-                "roles", roles
-        ));
+    public Result<?> login(@Valid @RequestBody LoginRequestDTO request) {
+        return Result.success(authService.login(request));
     }
 
     /**
@@ -83,28 +52,11 @@ public class AuthController {
      */
     @GetMapping("/me")
     @Operation(summary = "当前用户信息", description = "查询当前登录用户信息，需认证")
-    public Result<Map<String, Object>> me(HttpServletRequest request) {
+    public Result<?> me(HttpServletRequest request) {
         Object principal = request.getUserPrincipal();
         if (principal == null) {
             return Result.error(ResultCode.UNAUTHORIZED);
         }
-        return Result.success(Map.of(
-                "username", principal.toString(),
-                "authenticated", true
-        ));
-    }
-
-    /**
-     * 登录请求 DTO。
-     */
-    @Data
-    public static class LoginRequest {
-        @NotBlank(message = "用户名不能为空")
-        @Size(max = 64, message = "用户名长度不能超过 64 字符")
-        private String username;
-
-        @NotBlank(message = "密码不能为空")
-        @Size(max = 128, message = "密码长度不能超过 128 字符")
-        private String password;
+        return Result.success(authService.getCurrentUser(principal.toString()));
     }
 }
