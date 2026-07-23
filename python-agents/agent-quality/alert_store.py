@@ -4,6 +4,7 @@
 多副本部署时各副本共享同一 PG，避免告警丢失。
 错误不在本模块捕获，统一交由 main.py 异常处理器兜底。
 """
+from datetime import datetime, timezone
 
 from shared.config import settings
 from shared.db import close_pool as _shared_close_pool

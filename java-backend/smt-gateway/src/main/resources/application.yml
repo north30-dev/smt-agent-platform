@@ -10,6 +10,11 @@ spring:
   cloud:
     gateway:
       routes:
+        # /api/auth/** 转发至设备服务（认证端点）
+        - id: auth-service
+          uri: http://${SMT_DEVICE_SERVICE_HOST:localhost}:${SMT_DEVICE_SERVICE_PORT:8081}
+          predicates:
+            - Path=/api/auth/**
         # /api/device/** 转发至设备服务
         # 网关默认保留原始路径前缀，device-service 的 Controller 以 /api/device 为前缀，无需 StripPrefix
         - id: device-service
