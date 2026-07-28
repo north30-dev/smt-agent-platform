@@ -3,8 +3,7 @@ package com.smt.platform.gateway.security;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smt.platform.common.utils.JwtUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
@@ -35,11 +34,10 @@ import java.util.Map;
  * <p>用 {@code @Import(JwtUtil.class)} 单独引入 JwtUtil Bean，不扩大 ComponentScan 范围，
  * 保持 reactive 运行时纯净，避免误加载 smt-common 中的 Servlet 配置。</p>
  */
+@Slf4j
 @Component
 @Import(JwtUtil.class)
 public class AgentAuthWebFilter implements WebFilter, Ordered {
-
-    private static final Logger log = LoggerFactory.getLogger(AgentAuthWebFilter.class);
 
     private static final String AGENT_PATH_PREFIX = "/api/agent/";
 

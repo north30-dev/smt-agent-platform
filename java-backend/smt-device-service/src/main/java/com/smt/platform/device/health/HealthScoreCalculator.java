@@ -6,8 +6,7 @@ import com.smt.platform.device.mapper.DeviceMapper;
 import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.model.entity.DeviceData;
 import com.smt.platform.device.service.DeviceService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
@@ -42,10 +41,9 @@ import java.util.Map;
  * </ul>
  * <p>评分下限 0、上限 100；value 非数字时忽略，不扣分。</p>
  */
+@Slf4j
 @Component
 public class HealthScoreCalculator {
-
-    private static final Logger log = LoggerFactory.getLogger(HealthScoreCalculator.class);
 
     private final DeviceService deviceService;
     private final DeviceMapper deviceMapper;

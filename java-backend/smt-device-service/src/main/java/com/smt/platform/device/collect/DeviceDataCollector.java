@@ -8,8 +8,7 @@ import com.smt.platform.device.model.entity.DeviceDataPoint;
 import com.smt.platform.device.service.DeviceDataPointService;
 import com.smt.platform.device.service.DeviceDataService;
 import com.smt.platform.device.service.DeviceService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -29,10 +28,9 @@ import java.util.Map;
  * <p>单台设备订阅失败仅记录日志，不影响其他设备。数据写入后异步触发健康评分刷新，
  * 评分失败仅记日志，不影响数据存储主流程。</p>
  */
+@Slf4j
 @Component
 public class DeviceDataCollector implements ApplicationRunner {
-
-    private static final Logger log = LoggerFactory.getLogger(DeviceDataCollector.class);
 
     /** OPC UA 协议类型标识（与 Device.protocolType 取值对齐） */
     private static final String PROTOCOL_OPC_UA = "OPC_UA";

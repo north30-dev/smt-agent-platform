@@ -9,8 +9,7 @@ import com.smt.platform.common.response.ResultCode;
 import com.smt.platform.device.mapper.DeviceMapper;
 import com.smt.platform.device.model.entity.Device;
 import com.smt.platform.device.service.DeviceService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
@@ -40,11 +39,10 @@ import java.util.Set;
  * <p>M2 改造：{@link #update} 方法 8 字段判空拷贝改为 {@link BeanUtils#copyProperties} + null 属性过滤，
  * 保护 id/deviceCode/createTime/deleted 不被覆盖，行为与原判空逻辑等价。</p>
  */
+@Slf4j
 @Service
 @Transactional
 public class DeviceServiceImpl extends ServiceImpl<DeviceMapper, Device> implements DeviceService {
-
-    private static final Logger log = LoggerFactory.getLogger(DeviceServiceImpl.class);
 
     /**
      * update 时受保护字段：不允许通过 update 修改。

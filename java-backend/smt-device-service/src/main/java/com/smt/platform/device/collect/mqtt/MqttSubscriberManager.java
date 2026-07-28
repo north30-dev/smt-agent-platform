@@ -10,8 +10,7 @@ import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -30,10 +29,9 @@ import java.util.function.BiConsumer;
  * 避免阻断应用启动或其他设备订阅。docker-compose 当前未编排 MQTT broker，
  * 但本组件代码需支持连接，broker 不可用时仅记日志。</p>
  */
+@Slf4j
 @Component
 public class MqttSubscriberManager {
-
-    private static final Logger log = LoggerFactory.getLogger(MqttSubscriberManager.class);
 
     private final String broker;
     private final String clientIdPrefix;

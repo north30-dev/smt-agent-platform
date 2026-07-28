@@ -8,8 +8,7 @@ import com.smt.platform.device.model.entity.DeviceDataPoint;
 import com.smt.platform.device.service.DeviceDataPointService;
 import com.smt.platform.device.service.DeviceDataService;
 import com.smt.platform.device.service.DeviceService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -30,11 +29,10 @@ import java.util.List;
  * <p>使用 {@code @Order(10)} 确保在 {@link com.smt.platform.device.mock.MockMqttPublisher}
  * 之前完成订阅，避免 Mock 首轮发布丢失。</p>
  */
+@Slf4j
 @Component
 @Order(10)
 public class MqttDataCollector implements ApplicationRunner {
-
-    private static final Logger log = LoggerFactory.getLogger(MqttDataCollector.class);
 
     /** MQTT 协议类型标识（与 Device.protocolType 取值对齐） */
     private static final String PROTOCOL_MQTT = "MQTT";

@@ -4,8 +4,7 @@ import com.smt.platform.device.collect.mqtt.MqttSubscriberManager;
 import com.smt.platform.device.config.MockProperties;
 import com.smt.platform.device.config.MockProperties.MockDevice;
 import jakarta.annotation.PreDestroy;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -31,11 +30,10 @@ import java.util.concurrent.TimeUnit;
  * 使用 {@code @Order(20)} 确保在 {@link com.smt.platform.device.collect.MqttDataCollector}
  * 完成订阅后再开始发布。</p>
  */
+@Slf4j
 @Component
 @Order(20)
 public class MockMqttPublisher implements ApplicationRunner {
-
-    private static final Logger log = LoggerFactory.getLogger(MockMqttPublisher.class);
 
     private final MockProperties mockProperties;
     private final MqttSubscriberManager mqttSubscriberManager;

@@ -4,8 +4,7 @@ import com.smt.platform.common.response.Result;
 import com.smt.platform.common.response.ResultCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -38,10 +37,9 @@ import java.util.stream.Collectors;
  * {@link HttpMessageNotReadableException} 四类异常处理器，
  * 不再走兜底 500。</p>
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**
      * 捕获业务异常，HTTP 状态码与 {@link ResultCode#getCode()} 对齐。

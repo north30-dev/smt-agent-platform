@@ -18,8 +18,7 @@ import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn;
 import org.eclipse.milo.opcua.stack.core.types.structured.MonitoredItemCreateRequest;
 import org.eclipse.milo.opcua.stack.core.types.structured.MonitoringParameters;
 import org.eclipse.milo.opcua.stack.core.types.structured.ReadValueId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -42,10 +41,9 @@ import java.util.function.BiConsumer;
  * 默认值 100ms/50ms 符合 PRD &lt;100ms 契约；新增 {@code @PreDestroy} 销毁回调，
  * 应用关闭时显式释放所有 OpcUaClient 连接，避免连接泄漏。</p>
  */
+@Slf4j
 @Component
 public class OpcUaSubscriber {
-
-    private static final Logger log = LoggerFactory.getLogger(OpcUaSubscriber.class);
 
     /** OPC UA 采样参数（P0-6 配置化，替代原硬编码常量） */
     private final OpcUaProperties properties;

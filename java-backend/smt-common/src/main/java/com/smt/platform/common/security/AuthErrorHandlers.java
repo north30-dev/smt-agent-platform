@@ -5,8 +5,7 @@ import com.smt.platform.common.response.Result;
 import com.smt.platform.common.response.ResultCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -29,10 +28,9 @@ import java.io.IOException;
  *   <li>403 无权限：{@link ResultCode#FORBIDDEN}</li>
  * </ul>
  */
+@Slf4j
 @Configuration
 public class AuthErrorHandlers {
-
-    private static final Logger log = LoggerFactory.getLogger(AuthErrorHandlers.class);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
