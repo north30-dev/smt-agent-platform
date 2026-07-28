@@ -75,7 +75,7 @@ public class SlowSqlInterceptor implements Interceptor {
                 }
             }
         } catch (Exception e) {
-            log.debug("提取 SQL 文本失败", e);
+            slowSqlLogger.debug("提取 SQL 文本失败", e);
         }
         return "[unavailable]";
     }
