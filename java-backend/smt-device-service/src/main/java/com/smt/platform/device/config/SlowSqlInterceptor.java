@@ -9,6 +9,8 @@ import org.apache.ibatis.plugin.Plugin;
 import org.apache.ibatis.plugin.Signature;
 import org.apache.ibatis.session.ResultHandler;
 import lombok.extern.slf4j.Slf4j;
+
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -34,7 +36,7 @@ import java.util.Properties;
 @Component
 public class SlowSqlInterceptor implements Interceptor {
 
-    private static final org.slf4j.Logger slowSqlLogger = LoggerFactory.getLogger("slow-sql");
+    private static final Logger slowSqlLogger = LoggerFactory.getLogger("slow-sql");
 
     /** 慢 SQL 阈值（毫秒），默认 100ms */
     @Value("${smt.observation.slow-sql-threshold-ms:100}")
